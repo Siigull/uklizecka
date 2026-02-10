@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "eris": "^0.18.0"
+  }
+}

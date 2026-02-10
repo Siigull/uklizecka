@@ -1,0 +1,14 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env main.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "canvas": "^3.2.1",
+    "cheerio": "^1.2.0",
+    "eris": "^0.18.0",
+    "jsdom": "^28.1.0",
+    "node-cron": "^4.2.1"
+  }
+}

@@ -14,4 +14,8 @@ template cleaning
     place
     name
     instructions
+
+// Changing ids should probably be done by hand. Only remember clazzor
+users
+    id
     

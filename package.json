@@ -1,6 +1,8 @@
 {
+  "type": "module",
   "dependencies": {
     "better-sqlite3": "^12.6.2",
+    "canvas": "^3.2.1",
     "eris": "^0.18.0",
     "node-cron": "^4.2.1"
   }

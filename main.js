@@ -1,90 +1,38 @@
-// DB STUFF
-const Database = require('better-sqlite3');
-const db = new Database('uklidy.db');
-
-function db_init() {
-  db.prepare(`CREATE TABLE IF NOT EXISTS template_cleaning (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    max_users INTEGER,
-    place TEXT,
-    name TEXT,
-    instructions TEXT
-  )`).run();
-
-  db.prepare(`CREATE TABLE IF NOT EXISTS cleaning (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    users TEXT,
-    finished INTEGER,
-    date_start DATE,
-    date_end DATE,
-    template_rel INTEGER,
-    FOREIGN KEY(template_rel) REFERENCES template_cleaning(id)
-  )`).run();
-}
-
-function create_cleaning_template({ max_users, place, name, instructions }) {
-  const stmt = db.prepare(`
-    INSERT INTO template_cleaning 
-    (max_users, place, name, instructions) VALUES (?, ?, ?, ?)
-  `);
-  const info = stmt.run(max_users, place, name, instructions);
-  return info.lastInsertRowid;
-}
-
-function create_cleaning(template_id, { date_start, date_end }) {
-  const stmt = db.prepare(`
-    INSERT INTO cleaning 
-    (users, finished, date_start, date_end, template_rel) VALUES (?, ?, ?, ?, ?)
-  `);
-  const info = stmt.run(null, 0, date_start, date_end, template_id);
-  return info.lastInsertRowid;
-}
-
-function get_cleanings(start_date, end_date) {
-  try {
-    console.log("Fetching dates from " + start_date + " to " + end_date);
-
-    let sql = `SELECT c.id, c.users, c.finished, c.date_start, c.date_end, c.template_rel,
-                      t.max_users, t.place, t.name, t.instructions
-               FROM cleaning c
-               LEFT JOIN template_cleaning t ON c.template_rel = t.id
-               WHERE date_start BETWEEN ? AND ?`;
-
-    const stmt = db.prepare(sql);
-    const rows = stmt.all(start_date, end_date);
-    return rows.map(r => ({
-      id: r.id,
-      users: r.users ? r.users.split(',').map(u => u.trim()) : [],
-      finished: !!r.finished,
-      date_start: r.date_start,
-      date_end: r.date_end,
-      template_rel: r.template_rel,
-      template: {
-        max_users: r.max_users,
-        place: r.place,
-        name: r.name,
-        instructions: r.instructions
-      }
-    }));
-  } catch (err) {
-    console.error("get_cleanings error:", err);
-    return [];
-  }
-}
-
 // BOT
-const cron = require('node-cron');
-const Eris = require("eris");
+import { get_cleanings, create_cleaning_logged, create_template_logged, db_init } from './db.js';
+import { seed_cleanings } from './testing.js';
 
-const test_ch = "1470612014543011942"
-const bot = new Eris.CommandClient(process.env.BOT_TOKEN, {}, {  
+import { TEST_CH, LOG_CH, GUILD_ID } from './config.js'
+
+import { schedule } from 'node-cron';
+import Eris, { CommandClient } from "eris";
+
+const bot = new CommandClient(process.env.BOT_TOKEN, {
+    intents: [
+        "guilds",
+        "guildMessages",
+        "messageContent"
+    ]
+}, {  
     description: "A test bot made with Eris",
     owner: "somebody",
     prefix: "!"
 });
 
-async function send_notification() {
-  return bot.createMessage(test_ch, "dd", null).catch(err => {
+bot.guild_fetched = await bot.guilds.fetch(GUILD_ID);
+
+bot.send = async (channel, message) => {
+  return bot.createMessage(channel, message, null);
+}
+
+bot.send_log = async (message) => {
+  return bot.send(LOG_CH, message).catch(err => {
+    console.log("Send log message error: ", err);
+  })
+}
+
+bot.send_notification = async () => {
+  return bot.send(TEST_CH, "ee").catch(err => {
     console.log("Unauthorized to send message: ", err);
   })
 }
@@ -113,33 +61,33 @@ function get_cleanings_notify() {
   endNextWeek.setDate(startNextWeek.getDate() + 6);
 
   // Fetch
-  const previousWeekCleanings = get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
-  const thisWeekCleanings     = get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
-  const nextWeekCleanings     = get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
+  let previous_week_cleanings = get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
+  let this_week_cleanings     = get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
+  let next_week_cleanings     = get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
+
+  // Get only unfinished
+  previous_week_cleanings = previous_week_cleanings.filter((element, index, _) => {
+    return !element.finished;
+  });
+  this_week_cleanings = this_week_cleanings.filter((element, index, _) => {
+    return !element.finished;
+  });
+  next_week_cleanings = next_week_cleanings.filter((element, index, _) => {
+    return !element.finished;
+  });
 
   return {
-    previous: previousWeekCleanings,
-    current: thisWeekCleanings,
-    next: nextWeekCleanings
+    previous: previous_week_cleanings,
+    current: this_week_cleanings,
+    next: next_week_cleanings
   };
 }
 
-function seed_cleanings() {
-  template_id = create_cleaning_template()
-}
-
-function get_check_cleanings_notify() {
-  cleanings = get_cleanings_notify();
-
-  for(let cleaning of cleanings["previous"]) {
-
-  }
-}
-
 function schedule_send_notification_event() {
-  cron.schedule('47 5 * * *', () => {
+  // TODO(Sigull): Change for prod
+  schedule('47 5 * * *', () => {
     cleanings = check_which_cleanings_notify();
-    send_notification();
+    bot.send_notification();
   
   }, {
     scheduled: true,
@@ -150,15 +98,12 @@ function schedule_send_notification_event() {
 function startup_bot() {
   // TODO(Sigull): temp
   seed_cleanings();
+  get_cleanings_notify();
   schedule_send_notification_event();
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 async function main() {
-  db_init();
+  db_init(bot);
   
   bot.on("messageCreate", (msg) => {
     if(msg.content === "!ping") {
@@ -166,11 +111,192 @@ async function main() {
     }
   });
 
-  bot.connect();
+  // TODO(Sigull): Help command
 
-  bot.on("ready", () => {
+  bot.on("ready", async () => {
+    try {
+      await bot.bulkEditCommands([{
+        name: "report",
+        description: "Sends table of cleanings.",
+        fullDescription: "Sends table of cleanings from this semester. \
+                      The table is sent as a generated image.",
+        type: 1 
+      }]);
+      console.log("Slash Commands Registered!");
+
+    } catch (err) {
+      console.error("Failed to register commands:", err);
+    }
+
     startup_bot();
-  })
+  });
+
+  bot.on("interactionCreate", async (interaction) => {
+    if (interaction.data && interaction.data.name === "report") {
+        handle_report_command(interaction);
+        await interaction.createMessage("Generating report...");
+    }
+  });
+
+  bot.connect();
 }
 
 main()
+
+async function handle_report_command(msg, args) {
+  try {
+    const report = await generate_cleaning_report_image('2026-01-11', '2026-03-18');
+    
+    await bot.createMessage(msg.channel.id, {
+      content: "📋 **Cleaning Schedule Overview**"
+    }, report);
+    
+  } catch (err) {
+    console.error(err);
+    bot.createMessage(msg.channel.id, "Failed to generate report.");
+  }
+}
+
+import { createCanvas } from 'canvas';
+
+/**
+ * Generates a Gantt-style cleaning schedule
+ * @param {string} start_str - Interval start (YYYY-MM-DD)
+ * @param {string} end_str - Interval end (YYYY-MM-DD)
+ */
+export async function generate_cleaning_report_image(start_str, end_str) {
+  const cleanings = get_cleanings(start_str, end_str);
+  if (cleanings.length === 0) return null;
+
+  const getMonday = (d) => {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(date.setDate(diff));
+  };
+
+  const firstDate = new Date(cleanings.reduce((min, c) => c.date_start < min ? c.date_start : min, cleanings[0].date_start));
+  const lastDate = new Date(cleanings.reduce((max, c) => c.date_end > max ? c.date_end : max, cleanings[0].date_end));
+
+  const weekStart = getMonday(firstDate);
+  const totalWeeks = Math.ceil(((lastDate - weekStart) / (1000 * 60 * 60 * 24) + 1) / 7);
+
+  const templatesMap = new Map();
+  cleanings.forEach(c => {
+    if (!templatesMap.has(c.template_rel)) {
+      templatesMap.set(c.template_rel, { 
+        name: c.template.name, 
+        place: c.template.place, 
+        max_users: c.template.max_users,
+        instances: [] 
+      });
+    }
+    templatesMap.get(c.template_rel).instances.push(c);
+  });
+
+  const templateIds = Array.from(templatesMap.keys());
+
+  // Dimensions
+  const sidebarWidth = 350;
+  const weekWidth = 600; 
+  const rowHeight = 140;
+  const headerHeight = 100;
+  const padding = 60;
+
+  const width = sidebarWidth + (totalWeeks * weekWidth) + padding;
+  const height = headerHeight + (templateIds.length * rowHeight) + padding;
+
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = '#23272a';
+  ctx.fillRect(0, 0, width, height);
+
+  /** * Helper to draw text with truncation
+   */
+  const fillTextTruncated = (text, x, y, maxWidth) => {
+    let currentText = text || "";
+    if (ctx.measureText(currentText).width > maxWidth) {
+      while (ctx.measureText(currentText + "...").width > maxWidth && currentText.length > 0) {
+        currentText = currentText.slice(0, -1);
+      }
+      currentText += "...";
+    }
+    ctx.fillText(currentText, x, y);
+  };
+
+  // --- DRAW WEEKLY HEADERS ---
+  for (let w = 0; w < totalWeeks; w++) {
+    const weekX = sidebarWidth + (w * weekWidth);
+    const currentWeekStart = new Date(weekStart);
+    currentWeekStart.setDate(weekStart.getDate() + (w * 7));
+    const currentWeekEnd = new Date(currentWeekStart);
+    currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 36px sans-serif';
+    const dateRange = `${currentWeekStart.getDate()}.${currentWeekStart.getMonth() + 1}. — ${currentWeekEnd.getDate()}.${currentWeekEnd.getMonth() + 1}.`;
+    ctx.fillText(dateRange, weekX + 30, 65);
+
+    ctx.strokeStyle = '#4f545c';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(weekX, 0);
+    ctx.lineTo(weekX, height);
+    ctx.stroke();
+  }
+
+  // --- DRAW ROWS ---
+  templateIds.forEach((tid, idx) => {
+    const y = headerHeight + (idx * rowHeight);
+    const template = templatesMap.get(tid);
+
+    // Sidebar: Name & Place with Overrun Protection
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 30px sans-serif';
+    fillTextTruncated(template.name, 40, y + 55, sidebarWidth - 60);
+    
+    ctx.font = '22px sans-serif';
+    ctx.fillStyle = '#99aab5';
+    fillTextTruncated(template.place, 40, y + 90, sidebarWidth - 60);
+
+    // Cleanings (Inside a Clip to prevent sidebar overlap)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sidebarWidth, 0, width - sidebarWidth, height);
+    ctx.clip();
+
+    template.instances.forEach(c => {
+      const cStart = new Date(c.date_start);
+      const cEnd = new Date(c.date_end);
+      
+      const dayOffset = (cStart - weekStart) / (1000 * 60 * 60 * 24);
+      const dayDuration = ((cEnd - cStart) / (1000 * 60 * 60 * 24)) + 1;
+
+      const pixelsPerDay = weekWidth / 7;
+      const blockX = sidebarWidth + (dayOffset * pixelsPerDay) + 10;
+      const blockW = (dayDuration * pixelsPerDay) - 20;
+      const blockY = y + 15;
+      const blockH = rowHeight - 40;
+
+      ctx.fillStyle = c.finished ? '#43b581' : '#f04747';
+      ctx.beginPath();
+      ctx.roundRect(blockX, blockY, blockW, blockH, 15);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(c.finished ? 'DONE' : 'TODO', blockX + 20, blockY + 45);
+      
+      ctx.font = '20px sans-serif';
+      ctx.fillText(`👥 ${c.users.length}/${template.max_users}`, blockX + 20, blockY + 80);
+    });
+    ctx.restore();
+  });
+
+  return {
+    file: canvas.toBuffer('image/png'),
+    name: 'weekly_cleaning_report.png'
+  };
+}

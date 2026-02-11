@@ -1,6 +1,6 @@
 cleaning
     id
-    users
+    users // discord user ids, divided by ','
     finished
     date start
     date end

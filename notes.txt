@@ -1,1 +1,13 @@
 Add seeding data
+
+node --env-file=.env main.js
+
+All of humanity greatest efforts are to understand itself. 
+We have been searching for this with the help of the outside for now. 
+The technology we have now kind of cuts out the middleman of nature, 
+something that learns it almost directly, it is slowly but surely closing the feedback loop.
+Will we actually understand ourselves or will our findings degenerate turning back on us destroying us?
+
+Or is the implosion just another step. 
+
+It is never black or white.

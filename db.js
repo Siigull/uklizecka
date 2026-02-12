@@ -46,14 +46,22 @@ export function db_init(bot_instance) {
 }
 
 export async function sync_users(guild) {
+  await guild.fetchAllMembers();
   const members = await guild.members;
   const eligible_members = members.filter(m => !m.user.bot);
 
   const sync_transaction = db.transaction((member_list) => {
-    for (const [id, member] of member_list) {
-      let has_role = member.roles.includes(CLEANING_ROLE);
+    for (const member of member_list) {
+      let id = member.id;
+      let nick = member.nick ? member.nick : member.user.username;
+      let has_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
+      
       // Could be optimized. This prepares every statement.
-      add_update_user_logged(id, member.nick, has_role);
+      add_update_user_logged({
+        discord_id: id,
+        name: nick,
+        has_role: has_role
+      });
     }
   });
 
@@ -92,6 +100,10 @@ const _add_update_user = ({discord_id, name, has_role}) => {
   return info;
 }
 
+// TODO(Sigull): If finished cleaning unable to join or leave.
+// TODO(Sigull): Cant go over maximum cleaners.
+// TODO(Sigull): Cant join with some old id cleaning id.
+// TODO(Sigull): Add check if cleaning with id even exists.
 const _user_join_cleaning = ({discord_id, cleaning_id}) => {
   const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
   
@@ -145,12 +157,13 @@ const _log_template_created = (prev_ret, { name }) => {
   send_log(log_message);
 };
 
-const _log_add_update_user = (prev_ret, { discord_id, name }) => {
+const _log_add_update_user = (prev_ret, { discord_id, name, has_role }) => {
   // New user was added
   if (prev_ret.changes > 0 && prev_ret.lastInsertRowid > 0) {
     let log_message = `User ${name} now has to clean`;
     send_log(log_message);
 
+  // Just nickname change
   } else if (info.changes > 0) {
     console.log(`${discord_id} changed their nickname`);
   }
@@ -184,6 +197,7 @@ const with_logging = (task_fn, log_fn) => {
   };
 };
 
+// TODO(Sigull): Have better return value -> research how js does errors
 export const create_cleaning_logged     = with_logging(_create_cleaning, _log_cleaning_created);
 export const create_template_logged     = with_logging(_create_cleaning_template, _log_template_created);
 export const add_update_user_logged     = with_logging(_add_update_user, _log_add_update_user);
@@ -203,6 +217,9 @@ export function get_users() {
     return [];
   }
 }
+
+// TODO(Sigull): Count to how many cleanings a user is assigned.
+// TODO(Sigull): Think about permissions.
 
 // Get functions
 export function get_cleanings(start_date, end_date) {

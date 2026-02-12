@@ -1,5 +1,5 @@
 // BOT
-import { get_cleanings, add_update_user_logged, create_cleaning_logged, create_template_logged, db_init, sync_users } from './db.js';
+import { get_cleanings, add_update_user_logged, create_cleaning_logged, create_template_logged, db_init, sync_users, user_join_cleaning_logged } from './db.js';
 import { seed_cleanings } from './testing.js';
 
 import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH } from './config.js'
@@ -111,18 +111,31 @@ function startup_bot() {
 
 async function register_commands() {
   try {
-      await bot.bulkEditCommands([{
+    await bot.bulkEditCommands([
+      {
         name: "report",
         description: "Sends table of cleanings.",
         fullDescription: "Sends table of cleanings from this semester. \
                       The table is sent as a generated image.",
         type: 1 
-      }]);
-      console.log("Slash Commands Registered!");
+      },
+      {
+        name: "join",
+        description: "Join one cleaning specified with id.",
+        type: 1,
+        options: [{
+          name: "target_id",
+          description: "The id of cleaning to join.",
+          type: 4,
+          required: true
+        }]
+      }
+    ]);
+    console.log("Slash Commands Registered!");
 
-    } catch (err) {
-      console.error("Failed to register commands:", err);
-    }
+  } catch (err) {
+    console.error("Failed to register commands:", err);
+  }
 }
 
 async function main() {
@@ -141,9 +154,16 @@ async function main() {
   });
 
   bot.on("interactionCreate", async (interaction) => {
-    if (interaction.data && interaction.data.name === "report") {
-        handle_report_command(interaction);
-        await interaction.createMessage("Generating report...");
+    if (interaction.data) {
+        if (interaction.data.name === "report") {
+          handle_report_command(interaction);
+          await interaction.createMessage("Generating report...");
+        
+        } else if (interaction.data.name === "join") {
+          handle_join_command(interaction);
+          await interaction.createMessage("Joining cleaning...")
+
+        }
     }
   });
 
@@ -163,7 +183,7 @@ async function main() {
 
 main()
 
-async function handle_report_command(msg, args) {
+async function handle_report_command(msg) {
   try {
     const report = await generate_cleaning_report_image('2026-01-11', '2026-03-18');
     
@@ -174,6 +194,18 @@ async function handle_report_command(msg, args) {
   } catch (err) {
     console.error(err);
     bot.createMessage(msg.channel.id, "Failed to generate report.");
+  }
+}
+
+async function handle_join_command(msg) {
+  let member_id = msg.member.id;
+  let cleaning_id = msg.data.options[0].value;
+
+  try {
+    user_join_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+
+  } catch (err) {
+    console.log(err);
   }
 }
 
@@ -300,10 +332,12 @@ export async function generate_cleaning_report_image(start_str, end_str) {
       ctx.roundRect(blockX, blockY, blockW, blockH, 20);
       ctx.fill();
 
-      // Top Status Bar (DONE/TODO + Count)
+      // Top Status Bar (DONE / ID + Count)
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillText(c.finished ? 'DONE' : 'TODO', blockX + 25, blockY + 45);
+
+      const statusText = c.finished ? 'DONE' : `#${c.id}`;
+      ctx.fillText(statusText, blockX + 25, blockY + 45);
       
       ctx.font = 'bold 18px sans-serif';
       ctx.textAlign = 'right';

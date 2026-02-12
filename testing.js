@@ -1,4 +1,4 @@
-import { create_template_logged, create_cleaning_logged } from "./db.js";
+import { create_template_logged, create_cleaning_logged, add_update_user_logged, user_join_cleaning_logged } from "./db.js";
 
 export function seed_cleanings() {
   const bar_template_id = create_template_logged({
@@ -6,21 +6,21 @@ export function seed_cleanings() {
     place: "Kachna",
     name: "Bar",
     instructions: "uklid to idk"
-  });
+  }).lastInsertRowid;
 
   const nabytek_template_id = create_template_logged({
     max_users: 3,
     place: "Kachna",
     name: "Kachna",
     instructions: "utri to ig"
-  });
+  }).lastInsertRowid;
 
   const satna_template_id = create_template_logged({
     max_users: 4,
     place: "Zadní zázemí",
     name: "Šatny dole a nahoře",
     instructions: "Vyluxovat a utřít prach"
-  });
+  }).lastInsertRowid;
 
   // --- PREVIOUS WEEK ---
   create_cleaning_logged({
@@ -52,7 +52,7 @@ export function seed_cleanings() {
   });
 
   // --- NEXT WEEK ---
-  create_cleaning_logged({
+  let ret1 = create_cleaning_logged({
     template_id: bar_template_id,
     date_start: "2026-02-16", 
     date_end: "2026-02-22" 
@@ -62,6 +62,12 @@ export function seed_cleanings() {
     date_start: "2026-02-16",
     date_end: "2026-02-22" 
   });
+
+  add_update_user_logged({discord_id: "1", name: "jedna", has_role: 0});
+  add_update_user_logged({discord_id: "2", name: "dva",   has_role: 1});
+  add_update_user_logged({discord_id: "3", name: "tri",   has_role: 1});
+
+  user_join_cleaning_logged({discord_id: "1", cleaning_id: ret1.lastInsertRowid});
 
   console.log("Seeding complete.");
 }

@@ -19,6 +19,7 @@ export function db_init(bot_instance) {
   db.prepare(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     discord_id TEXT UNIQUE NOT NULL,
+    has_role BOOLEAN NOT NULL,
     name TEXT NOT NULL
   )`).run();
 
@@ -46,12 +47,13 @@ export function db_init(bot_instance) {
 
 export async function sync_users(guild) {
   const members = await guild.members;
-  const eligible_members = members.filter(m => m.roles.includes(CLEANING_ROLE) && !m.user.bot);
+  const eligible_members = members.filter(m => !m.user.bot);
 
   const sync_transaction = db.transaction((member_list) => {
     for (const [id, member] of member_list) {
-      // Could be optimized. This prepares every statement. 
-      add_user_logging(id);
+      let has_role = member.roles.includes(CLEANING_ROLE);
+      // Could be optimized. This prepares every statement.
+      add_update_user_logged(id, member.nick, has_role);
     }
   });
 
@@ -66,7 +68,7 @@ const _create_cleaning = ({template_id, date_start, date_end}) => {
     (finished, date_start, date_end, template_rel) VALUES (?, ?, ?, ?)
   `);
   const info = stmt.run(0, date_start, date_end, template_id);
-  return info.lastInsertRowid;
+  return info;
 }
 
 const _create_cleaning_template = ({max_users, place, name, instructions}) => {
@@ -75,24 +77,60 @@ const _create_cleaning_template = ({max_users, place, name, instructions}) => {
     (max_users, place, name, instructions) VALUES (?, ?, ?, ?)
   `);
   const info = stmt.run(max_users, place, name, instructions);
-  return info.lastInsertRowid;
+  return info;
 };
 
-const _add_update_user = ({discord_id, name}) => {
+const _add_update_user = ({discord_id, name, has_role}) => {
   const stmt = db.prepare(`
-    INSERT INTO users (discord_id, name)
-    VALUES (?, ?)
+    INSERT INTO users (discord_id, name, has_role)
+    VALUES (?, ?, ?)
     ON CONFLICT(discord_id) DO UPDATE SET
       name = EXCLUDED.name
   `);
 
-  const info = stmt.run(discord_id, name);
+  const info = stmt.run(discord_id, name, has_role);
   return info;
 }
+
+const _user_join_cleaning = ({discord_id, cleaning_id}) => {
+  const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
+  
+  if (!user) {
+    throw new Error(`User with discord_id ${discord_id} not found.`);
+  }
+
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO cleaning_participants (cleaning_id, user_id)
+    VALUES (?, ?)
+  `);
+
+  const info = stmt.run(cleaning_id, user.id);
+  return info;
+};
+
+const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
+  const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
+  
+  if (!user) {
+    throw new Error(`User with discord_id ${discord_id} not found.`);
+  }
+
+  const stmt = db.prepare(`
+    DELETE FROM cleaning_participants 
+    WHERE cleaning_id = ? AND user_id = ?
+  `);
+
+  const info = stmt.run(cleaning_id, user.id);
+  return info;
+};
 
 // Log functions to combine with add functions
 function send_log(message) {
   bot.send_log("```" + message + "```");
+}
+
+function send_imp_log(message) {
+  bot.send_imp_log("```" + message + "```");
 }
 
 const _log_cleaning_created = (prev_ret, {template_id, date_start, date_end}) => {
@@ -118,6 +156,18 @@ const _log_add_update_user = (prev_ret, { discord_id, name }) => {
   }
 }
 
+const _log_user_join_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
+  if (prev_ret.changes > 0) {
+    send_log(`User <@${discord_id}> joined cleaning #${cleaning_id}`);
+  }
+};
+
+const _log_user_leave_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
+  if (prev_ret.changes > 0) {
+    send_imp_log(`User <@${discord_id}> left cleaning #${cleaning_id}`);
+  }
+};
+
 // Combined functions
 /**
  * @template {Array<any>} T
@@ -134,9 +184,11 @@ const with_logging = (task_fn, log_fn) => {
   };
 };
 
-export const create_cleaning_logged = with_logging(_create_cleaning, _log_cleaning_created);
-export const create_template_logged = with_logging(_create_cleaning_template, _log_template_created);
-export const add_update_user        = with_logging(_add_update_user, _log_add_update_user);
+export const create_cleaning_logged     = with_logging(_create_cleaning, _log_cleaning_created);
+export const create_template_logged     = with_logging(_create_cleaning_template, _log_template_created);
+export const add_update_user_logged     = with_logging(_add_update_user, _log_add_update_user);
+export const user_join_cleaning_logged  = with_logging(_user_join_cleaning, _log_user_join_cleaning);
+export const user_leave_cleaning_logged = with_logging(_user_leave_cleaning, _log_user_leave_cleaning);
 
 /**
  * Fetches all registered users from the database.

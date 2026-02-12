@@ -1,8 +1,8 @@
 // BOT
-import { get_cleanings, add_update_user, create_cleaning_logged, create_template_logged, db_init, sync_users } from './db.js';
+import { get_cleanings, add_update_user_logged, create_cleaning_logged, create_template_logged, db_init, sync_users } from './db.js';
 import { seed_cleanings } from './testing.js';
 
-import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE } from './config.js'
+import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH } from './config.js'
 
 import { schedule } from 'node-cron';
 import Eris, { CommandClient } from "eris";
@@ -27,6 +27,12 @@ bot.send = async (channel, message) => {
 bot.send_log = async (message) => {
   return bot.send(LOG_CH, message).catch(err => {
     console.log("Send log message error: ", err);
+  })
+}
+
+bot.send_imp_log = async (message) => {
+  return bot.send(IMP_LOG_CH, message).catch(err => {
+    console.log("Send important log message error: ", err);
   })
 }
 
@@ -63,7 +69,6 @@ function get_cleanings_notify() {
   let previous_week_cleanings = get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
   let this_week_cleanings     = get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
   let next_week_cleanings     = get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
-  console.log(JSON.stringify(previous_week_cleanings, null, 2))
 
   // Get only unfinished
   previous_week_cleanings = previous_week_cleanings.filter((element, index, _) => {
@@ -142,14 +147,14 @@ async function main() {
     }
   });
 
-  // TODO(Sigull): Maybe also add removal of roles
-  //               Removed upon restarting bot -> not that big of a problem 
+  // TODO(Sigull): Maybe also when removal of roles.
   bot.on("guildMemberUpdate", (guild, member, oldMember) => {
+    let has_cleaning_role = member.roles.includes(CLEANING_ROLE);
     if (oldMember.nick != member.nick) {
-      add_update_user({discord_id: member.discord_id, name: member.nick});
+      add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
     
-    } else if (!oldMember.roles.includes(CLEANING_ROLE) && member.roles.includes(CLEANING_ROLE)) {
-      add_update_user({discord_id: member.discord_id, name: member.nick});
+    } else if (!oldMember.roles.includes(CLEANING_ROLE) && has_cleaning_role) {
+      add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
     }
   });
 
@@ -302,7 +307,7 @@ export async function generate_cleaning_report_image(start_str, end_str) {
       
       ctx.font = 'bold 18px sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(`${c.users.length}/${template.max_users} 👥`, blockX + blockW - 25, blockY + 45);
+      ctx.fillText(`${c.users.length}/${template.max_users}`, blockX + blockW - 25, blockY + 45);
       ctx.textAlign = 'left';
 
       // Divider Line inside Pill

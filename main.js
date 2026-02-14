@@ -1,8 +1,9 @@
 // BOT
-import { get_cleanings, add_update_user_logged, create_cleaning_logged, create_template_logged, db_init, sync_users, user_join_cleaning_logged } from './db.js';
+import { get_cleanings, add_update_user_logged, create_cleaning_logged, 
+  create_template_logged, db_init, sync_users, user_join_cleaning_logged, user_leave_cleaning_logged } from './db.js';
 import { seed_cleanings } from './testing.js';
 
-import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH } from './config.js'
+import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
 import { schedule } from 'node-cron';
 import Eris, { CommandClient } from "eris";
@@ -19,6 +20,16 @@ const bot = new CommandClient(process.env.BOT_TOKEN, {
     owner: "somebody",
     prefix: "!"
 });
+
+bot.createThread = async (channel_id) => {
+  bot.createThread(channel_id, {
+    name: "Cleaning",
+    type: 12,
+    autoArchiveDuration: 60
+  }).then(thread => {
+      thread.createMessage("Welcome to the new thread!");
+  });
+}
 
 bot.send = async (channel, message) => {
   return bot.createMessage(channel, message, null);
@@ -109,28 +120,11 @@ function startup_bot() {
   get_cleanings_notify();
 }
 
-async function register_commands() {
+async function register_commands(commands) {
+  console.log(commands);
+
   try {
-    await bot.bulkEditCommands([
-      {
-        name: "report",
-        description: "Sends table of cleanings.",
-        fullDescription: "Sends table of cleanings from this semester. \
-                      The table is sent as a generated image.",
-        type: 1 
-      },
-      {
-        name: "join",
-        description: "Join one cleaning specified with id.",
-        type: 1,
-        options: [{
-          name: "target_id",
-          description: "The id of cleaning to join.",
-          type: 4,
-          required: true
-        }]
-      }
-    ]);
+    await bot.bulkEditCommands(commands);
     console.log("Slash Commands Registered!");
 
   } catch (err) {
@@ -140,6 +134,51 @@ async function register_commands() {
 
 async function main() {
   db_init(bot);
+
+  let public_commands = [
+    {
+      name: "report",
+      description: "Sends table of cleanings.",
+      fullDescription: "Sends table of cleanings from this semester. The table is sent as a generated image.",
+      type: 1,
+      handler_function: handle_report_command,
+    },
+    {
+      name: "join",
+      description: "Join one cleaning of specified id.",
+      type: 1,
+      options: [{
+        name: "target_id",
+        description: "The id of cleaning to join.",
+        type: 4,
+        required: true
+      }],
+      handler_function: handle_join_command,
+    },
+    {
+      name: "leave",
+      description: "Leave one cleaning of specified id.",
+      type: 1,
+      options: [{
+        name: "target_id",
+        description: "The id of cleaning to leave.",
+        type: 4,
+        required: true
+      }],
+      handler_function: handle_leave_command,
+    },
+  ];
+
+  let manager_commands = [
+    {
+      // TODO(Sigull): Also should have edit template command
+      name: "create-template",
+      description: "Create template for cleaning.",
+      fullDescription: "Create template for cleaning through discord modal functionality as a form.",
+      type: 1,
+      handler_function: handle_create_template_command,
+    },
+  ];
   
   bot.on("messageCreate", (msg) => {
     if(msg.content === "!ping") {
@@ -149,21 +188,33 @@ async function main() {
 
   // TODO(Sigull): Help command
   bot.on("ready", async () => {
-    register_commands();
+    register_commands([...public_commands, ...manager_commands]);
     startup_bot();
   });
 
   bot.on("interactionCreate", async (interaction) => {
     if (interaction.data) {
-        if (interaction.data.name === "report") {
-          handle_report_command(interaction);
-          await interaction.createMessage("Generating report...");
-        
-        } else if (interaction.data.name === "join") {
-          handle_join_command(interaction);
-          await interaction.createMessage("Joining cleaning...")
+      // TODO(Sigull): Give error to end user. 
 
+      console.log(interaction);
+
+      let public_command = public_commands.find(c => c.name === interaction.data.name);
+      if (public_command && public_command.handler_function) {
+        public_command.handler_function(interaction);
+        return;
+      }
+
+      let manager_command = manager_commands.find(c => c.name === interaction.data.name);
+      if (manager_command && manager_command.handler_function) {
+        if (!interaction.member.roles.some(r => r === MANAGER_ROLE)) {
+            await interaction.createMessage("[ERROR]: Must be cleaning manager to use this command.");
+        } else {
+          manager_command.handler_function(interaction);
         }
+        return;
+      }
+
+      console.error(`Command ${interaction.data.name} not implemented.`);
     }
   });
 
@@ -195,6 +246,8 @@ async function handle_report_command(msg) {
     console.error(err);
     bot.createMessage(msg.channel.id, "Failed to generate report.");
   }
+
+  await interaction.createMessage("Generated report.");
 }
 
 async function handle_join_command(msg) {
@@ -207,6 +260,78 @@ async function handle_join_command(msg) {
   } catch (err) {
     console.log(err);
   }
+
+  await interaction.createMessage("Joined cleaning.")
+}
+
+async function handle_leave_command(msg) {
+  let member_id = msg.member.id;
+  let cleaning_id = msg.data.options[0].value;
+
+  try {
+    user_leave_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+
+  } catch (err) {
+    console.log(err);
+  }
+
+  await interaction.createMessage("Left cleaning.");
+}
+
+async function handle_create_template_command(msg) {
+  await msg.createModal({
+    title: "Cleaning template",
+    custom_id: "create_template",
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 3,
+            custom_id: "max_users",
+            label: "Maximum number of people cleaning.",
+            options: [
+              {label: 1, value: 1}, {label: 2, value: 2},
+              {label: 3, value: 3}, {label: 4, value: 4},
+              {label: 5, value: 5}, {label: 6, value: 6},
+            ],
+            required: true
+          },{
+            type: 4,
+            custom_id: "place",
+            label: "Place of cleaning.",
+            style: 1,
+            min_length: 1,
+            max_length: 100,
+            placeholder: "Ideálné něco jako R212 - Kachna",
+            required: true
+          },{
+            type: 4,
+            custom_id: "name",
+            label: "Name of the template",
+            style: 1,
+            min_length: 5,
+            max_length: 100,
+            placeholder: "Jméno úklidu",
+            required: true
+          },{
+            type: 4,
+            custom_id: "instructions",
+            label: "Cleaning instructions",
+            style: 2,
+            min_length: 5,
+            max_length: 4000,
+            placeholder: "https://docs.google.com/document/d/1jrZ5fQwdwhNQFOgdCntE3qfUOjhAazPNfKABb3d5fKg/edit?tab=t.0#heading=h.oqrd48mlopj0",
+            required: true
+          },
+        ]
+      }
+    ]
+  });
+}
+
+async function handle_create_template_modal(modal) {
+
 }
 
 import { createCanvas } from 'canvas';

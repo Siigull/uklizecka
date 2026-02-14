@@ -28,6 +28,7 @@ export function db_init(bot_instance) {
     finished INTEGER DEFAULT 0,
     date_start DATE,
     date_end DATE,
+    discord_thread TEXT,
     template_rel INTEGER,
     FOREIGN KEY(template_rel) REFERENCES template_cleaning(id)
   )`).run();
@@ -100,15 +101,24 @@ const _add_update_user = ({discord_id, name, has_role}) => {
   return info;
 }
 
-// TODO(Sigull): If finished cleaning unable to join or leave.
-// TODO(Sigull): Cant go over maximum cleaners.
-// TODO(Sigull): Cant join with some old id cleaning id.
-// TODO(Sigull): Add check if cleaning with id even exists.
+// TODO(Sigull): Add more function for someone with priviliges to for example finish unfinished 
+//               Print stuff about who cleaned etc.
+
 const _user_join_cleaning = ({discord_id, cleaning_id}) => {
   const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
-  
+  const cleaning = get_cleaning_by_id(cleaning_id);
+
   if (!user) {
-    throw new Error(`User with discord_id ${discord_id} not found.`);
+    throw new Error(`User with discord_id: ${discord_id} not found.`);
+  }
+  if (!cleaning) {
+    throw new Error(`Cleaning with id: ${cleaning_id} not found.`);
+  }
+  if (cleaning.finished) {
+    throw new Error(`Can't join finished cleaning with id: ${cleaning_id}`);
+  }
+  if (cleaning.users.length >= cleaning.max_users) {
+    throw new Error(`Can't join full cleaning with id: ${cleaning_id}.`)
   }
 
   const stmt = db.prepare(`
@@ -122,9 +132,21 @@ const _user_join_cleaning = ({discord_id, cleaning_id}) => {
 
 const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
   const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
-  
+  const cleaning = get_cleaning_by_id(cleaning_id);
+
+  console.log(cleaning);
+
   if (!user) {
     throw new Error(`User with discord_id ${discord_id} not found.`);
+  }
+  if (!cleaning) {
+    throw new Error(`Cleaning with id ${discord_id} doesn't exist.`);
+  }
+  if (!cleaning.users.some(user => user.discord_id == discord_id)) {
+    throw new Error(`You cannot leave a cleaning you are not a part of.`)
+  }
+  if (cleaning.finished) {
+    throw new Error(`Why would you want to leave a finished cleaning you cunt.`);
   }
 
   const stmt = db.prepare(`
@@ -228,7 +250,7 @@ export function get_cleanings(start_date, end_date) {
 
     let sql = `
       SELECT 
-          c.id, c.finished, c.date_start, c.date_end, c.template_rel, 
+          c.id, c.finished, c.date_start, c.date_end, c.discord_thread, c.template_rel, 
           t.max_users, t.place, t.name, t.instructions,
           -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
           '[' || IFNULL(
@@ -256,6 +278,7 @@ export function get_cleanings(start_date, end_date) {
       finished: !!r.finished,
       date_start: r.date_start,
       date_end: r.date_end,
+      discord_thread: r.discord_thread,
       template_rel: r.template_rel,
       template: {
         max_users: r.max_users,
@@ -267,5 +290,57 @@ export function get_cleanings(start_date, end_date) {
   } catch (err) {
     console.error("get_cleanings error:", err);
     return [];
+  }
+}
+
+/**
+ * Fetches a single cleaning record by its ID, including template info and participants.
+ * @param {number|string} cleaning_id
+ * @returns {Object|null} The cleaning object or null if not found.
+ */
+export function get_cleaning_by_id(cleaning_id) {
+  try {
+    const sql = `
+      SELECT 
+          c.id, c.finished, c.date_start, c.date_end, c.discord_thread, c.template_rel, 
+          t.max_users, t.place, t.name, t.instructions,
+          '[' || IFNULL(
+              GROUP_CONCAT(
+                  CASE WHEN u.id IS NOT NULL 
+                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name) 
+                  ELSE NULL END
+              ), 
+              ''
+          ) || ']' AS participants
+      FROM cleaning c
+      LEFT JOIN template_cleaning t ON c.template_rel = t.id
+      LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE c.id = ?
+      GROUP BY c.id;
+    `;
+
+    const row = db.prepare(sql).get(cleaning_id);
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      users: JSON.parse(row.participants || '[]'),
+      finished: !!row.finished,
+      date_start: row.date_start,
+      date_end: row.date_end,
+      discord_thread: row.discord_thread,
+      template_rel: row.template_rel,
+      template: {
+        max_users: row.max_users,
+        place: row.place,
+        name: row.name,
+        instructions: row.instructions
+      }
+    };
+  } catch (err) {
+    console.error(`get_cleaning_by_id error for ID ${cleaning_id}:`, err);
+    return null;
   }
 }

@@ -1,5 +1,5 @@
 // BOT
-import { get_cleanings, add_update_user_logged, create_cleaning_logged, 
+import { get_cleanings, add_update_user_logged, create_cleaning_logged, get_templates,
   create_template_logged, db_init, sync_users, user_join_cleaning_logged, user_leave_cleaning_logged } from './db.js';
 import { seed_cleanings } from './testing.js';
 
@@ -121,8 +121,6 @@ function startup_bot() {
 }
 
 async function register_commands(commands) {
-  console.log(commands);
-
   try {
     await bot.bulkEditCommands(commands);
     console.log("Slash Commands Registered!");
@@ -178,6 +176,13 @@ async function main() {
       type: 1,
       handler_function: handle_create_template_command,
     },
+    {
+      name: "create-cleaning",
+      description: "Create cleaning from template",
+      fullDescription: "Create cleaning through discord modal functionality as a form where template is selected.",
+      type: 1,
+      handler_function: handle_create_cleaning_command,
+    },
   ];
   
   bot.on("messageCreate", (msg) => {
@@ -196,8 +201,6 @@ async function main() {
     if (interaction.data) {
       // TODO(Sigull): Give error to end user. 
 
-      console.log(interaction);
-
       let public_command = public_commands.find(c => c.name === interaction.data.name);
       if (public_command && public_command.handler_function) {
         public_command.handler_function(interaction);
@@ -212,6 +215,16 @@ async function main() {
           manager_command.handler_function(interaction);
         }
         return;
+      }
+
+      switch(interaction.data.custom_id) {
+        case "create_template":
+          handle_create_template_modal(interaction);
+          return;
+
+        case "create_cleaning":
+          handle_create_cleaning_modal(interaction);
+          return;
       }
 
       console.error(`Command ${interaction.data.name} not implemented.`);
@@ -247,7 +260,7 @@ async function handle_report_command(msg) {
     bot.createMessage(msg.channel.id, "Failed to generate report.");
   }
 
-  await interaction.createMessage("Generated report.");
+  await msg.createMessage("Generated report.");
 }
 
 async function handle_join_command(msg) {
@@ -261,7 +274,7 @@ async function handle_join_command(msg) {
     console.log(err);
   }
 
-  await interaction.createMessage("Joined cleaning.")
+  await msg.createMessage("Joined cleaning.")
 }
 
 async function handle_leave_command(msg) {
@@ -275,63 +288,200 @@ async function handle_leave_command(msg) {
     console.log(err);
   }
 
-  await interaction.createMessage("Left cleaning.");
+  await msg.createMessage("Left cleaning.");
 }
 
-async function handle_create_template_command(msg) {
+// TODO(Sigull): Add a way to show templates in a more whole way.
+async function handle_create_cleaning_command(msg) {
+  let templates = get_templates();
+  let template_name_id_pairs = []
+
+  for (const t of templates) {
+    template_name_id_pairs.push({"label": t.name, "value": t.id});
+  }
+
   await msg.createModal({
-    title: "Cleaning template",
-    custom_id: "create_template",
-    components: [
+    "title": "Cleaning",
+    "custom_id": "create_cleaning",
+    "components": [
       {
-        type: 1,
-        components: [
-          {
-            type: 3,
-            custom_id: "max_users",
-            label: "Maximum number of people cleaning.",
-            options: [
-              {label: 1, value: 1}, {label: 2, value: 2},
-              {label: 3, value: 3}, {label: 4, value: 4},
-              {label: 5, value: 5}, {label: 6, value: 6},
-            ],
-            required: true
-          },{
-            type: 4,
-            custom_id: "place",
-            label: "Place of cleaning.",
-            style: 1,
-            min_length: 1,
-            max_length: 100,
-            placeholder: "Ideálné něco jako R212 - Kachna",
-            required: true
-          },{
-            type: 4,
-            custom_id: "name",
-            label: "Name of the template",
-            style: 1,
-            min_length: 5,
-            max_length: 100,
-            placeholder: "Jméno úklidu",
-            required: true
-          },{
-            type: 4,
-            custom_id: "instructions",
-            label: "Cleaning instructions",
-            style: 2,
-            min_length: 5,
-            max_length: 4000,
-            placeholder: "https://docs.google.com/document/d/1jrZ5fQwdwhNQFOgdCntE3qfUOjhAazPNfKABb3d5fKg/edit?tab=t.0#heading=h.oqrd48mlopj0",
-            required: true
-          },
-        ]
+        "type": 18,
+        "label": "Cleaning template.",
+        "component": {
+          "type": 3,
+          "custom_id": "template_id",
+          "placeholder": "Select a template...",
+          "options": template_name_id_pairs,
+        }
+      },
+      {
+        "type": 18,
+        "label": "Start date.",
+        "component": {
+          "type": 4,
+          "custom_id": "start_date",
+          "style": 1,
+          "placeholder": "YYYY-MM-DD",
+        }
+      },
+      {
+        "type": 18,
+        "label": "End date.",
+        "component": {
+          "type": 4,
+          "custom_id": "end_date",
+          "style": 1,
+          "placeholder": "YYYY-MM-DD"
+        }
+      },
+      {
+        "type": 18,
+        "label": "Number of repetitions.",
+        "component": {
+          "type": 3,
+          "custom_id": "repetitions",
+          "placeholder": "Select a number...",
+          "options": [
+            { "label": "1",  "value": 1  },
+            { "label": "2",  "value": 2  },
+            { "label": "3",  "value": 3  },
+            { "label": "4",  "value": 4  },
+            { "label": "5",  "value": 5  },
+            { "label": "6",  "value": 6  },
+            { "label": "7",  "value": 7  },
+            { "label": "8",  "value": 8  },
+            { "label": "9",  "value": 9  },
+            { "label": "10", "value": 10 },
+            { "label": "11", "value": 11 },
+            { "label": "12", "value": 12 },
+            { "label": "13", "value": 13 }
+          ]
+        }
       }
     ]
   });
 }
 
-async function handle_create_template_modal(modal) {
+async function handle_create_template_command(msg) {
+  await msg.createModal({
+    "title": "Cleaning template",
+    "custom_id": "create_template",
+    "components": [
+      {
+        "type": 18,
+        "label": "Maximum number of people cleaning.",
+        "component": {
+          "type": 3,
+          "custom_id": "max_users",
+          "placeholder": "Select a number...",
+          "options": [
+            { "label": "1", "value": "1" },
+            { "label": "2", "value": "2" },
+            { "label": "3", "value": "3" },
+            { "label": "4", "value": "4" },
+            { "label": "5", "value": "5" },
+            { "label": "6", "value": "6" }
+          ]
+        }
+      },
+      {
+        "type": 18,
+        "label": "Place of cleaning.",
+        "component": {
+          "type": 4,
+          "custom_id": "place",
+          "style": 1,
+          "placeholder": "Ideálně něco jako R212 - Kachna"
+        }
+      },
+      {
+        "type": 18,
+        "label": "Name of the template",
+        "component": {
+          "type": 4,
+          "custom_id": "name",
+          "style": 1,
+          "placeholder": "Jméno úklidu"
+        }
+      },
+      {
+        "type": 18,
+        "label": "Cleaning instructions",
+        "component": {
+          "type": 4,
+          "custom_id": "instructions",
+          "style": 2,
+          "placeholder": "Paste Google Docs link here..."
+        }
+      }
+    ]
+  });
+}
 
+// TODO(Sigull): Validate data.
+async function handle_create_template_modal(modal) {
+  let res = modal.data.components;
+  let max_users, place, name, instructions;
+  for (const c of res) {
+    switch(c.component.custom_id) {
+      case "max_users":
+        max_users = c.component.values[0];
+        break;
+      case "place":
+        place = c.component.value;
+        break;
+      case "name":
+        name = c.component.value;
+        break;
+      case "instructions":
+        instructions = c.component.value;
+        break;
+    }
+  }
+
+  create_template_logged({max_users, place, name, instructions});
+
+  await modal.createMessage("Cleaning template created.");
+}
+
+function increment_week(date_string) {
+  // format (YYYY-MM-DD)
+  const date = new Date(date_string);
+  date.setDate(date.getDate() + 7);
+  return date.toISOString().split('T')[0];
+}
+
+async function handle_create_cleaning_modal(modal) {
+  let res = modal.data.components;
+  let template_id, date_start, date_end, repetitions;
+
+  // TODO(Sigull): Maybe just use a map and check validity later.
+  for (const c of res) {
+    switch(c.component.custom_id) {
+      case "template_id":
+        template_id = c.component.values[0];
+        break;
+      case "start_date":
+        date_start = c.component.value;
+        break;
+      case "end_date":
+        date_end = c.component.value;
+        break;
+      case "repetitions":
+        repetitions = c.component.values[0];
+        break;
+    }
+  }
+
+  // TODO(Sigull): Do this as transaction. If one fails all fail.
+  // TODO(Sigull): Have a simple way to remove all at once.
+  for (let i=0; i < repetitions; i++) {
+    create_cleaning_logged({template_id, date_start, date_end});
+    date_start = increment_week(date_start);
+    date_end = increment_week(date_end);
+  }
+
+  await modal.createMessage("Cleaning/s created.")
 }
 
 import { createCanvas } from 'canvas';

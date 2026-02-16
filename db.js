@@ -70,7 +70,9 @@ export async function sync_users(guild) {
   console.log(`Synced ${eligible_members.size} users.`);
 }
 
-// Add functions
+
+// -- Add functions
+// TODO(Sigull): Cleanings with same template shouldnt overlap.
 const _create_cleaning = ({template_id, date_start, date_end}) => {
   const stmt = db.prepare(`
     INSERT INTO cleaning 
@@ -158,7 +160,7 @@ const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
   return info;
 };
 
-// Log functions to combine with add functions
+// -- Log functions to combine with add functions
 function send_log(message) {
   bot.send_log("```" + message + "```");
 }
@@ -203,7 +205,7 @@ const _log_user_leave_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
   }
 };
 
-// Combined functions
+// -- Combined functions
 /**
  * @template {Array<any>} T
  * @template R
@@ -342,5 +344,19 @@ export function get_cleaning_by_id(cleaning_id) {
   } catch (err) {
     console.error(`get_cleaning_by_id error for ID ${cleaning_id}:`, err);
     return null;
+  }
+}
+
+/**
+ * Fetches all cleaning templates.
+ * @returns {Array<{id: number, max_users: number, place: string, name: string, instructions: string}>}
+ */
+export function get_templates() {
+  try {
+    const stmt = db.prepare('SELECT * FROM template_cleaning');
+    return stmt.all();
+  } catch (err) {
+    console.error("get_templates error:", err);
+    return [];
   }
 }

@@ -26,41 +26,48 @@ export function seed_cleanings() {
   create_cleaning_logged({
     template_id: bar_template_id,
     date_start: "2026-02-02", 
-    date_end: "2026-02-08" 
+    date_end: "2026-02-08",
+    discord_thread_id: null,
   });
   create_cleaning_logged({
     template_id: nabytek_template_id, 
     date_start: "2026-02-02", 
-    date_end: "2026-02-08"
+    date_end: "2026-02-08",
+    discord_thread_id: null
   });
 
   // --- THIS WEEK ---
   create_cleaning_logged({
     template_id: bar_template_id,
     date_start: "2026-02-9",
-    date_end: "2026-02-15"
+    date_end: "2026-02-15",
+    discord_thread_id: null
   });
   create_cleaning_logged({
     template_id: nabytek_template_id,
     date_start: "2026-02-9",
-    date_end: "2026-02-15"
+    date_end: "2026-02-15",
+    discord_thread_id: null
   });
   create_cleaning_logged({
     template_id: satna_template_id,
     date_start: "2026-02-9",
-    date_end: "2026-02-15"
+    date_end: "2026-02-15",
+    discord_thread_id: null
   });
 
   // --- NEXT WEEK ---
   let ret1 = create_cleaning_logged({
     template_id: bar_template_id,
     date_start: "2026-02-16", 
-    date_end: "2026-02-22" 
+    date_end: "2026-02-22" ,
+    discord_thread_id: null
   });
   create_cleaning_logged({
     template_id: satna_template_id,
     date_start: "2026-02-16",
-    date_end: "2026-02-22" 
+    date_end: "2026-02-22" ,
+    discord_thread_id: null
   });
 
   add_update_user_logged({discord_id: "1", name: "jedna", has_role: 0});

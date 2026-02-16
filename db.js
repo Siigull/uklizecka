@@ -28,7 +28,7 @@ export function db_init(bot_instance) {
     finished INTEGER DEFAULT 0,
     date_start DATE,
     date_end DATE,
-    discord_thread TEXT,
+    discord_thread_id TEXT,
     template_rel INTEGER,
     FOREIGN KEY(template_rel) REFERENCES template_cleaning(id)
   )`).run();
@@ -73,13 +73,31 @@ export async function sync_users(guild) {
 
 // -- Add functions
 // TODO(Sigull): Cleanings with same template shouldnt overlap.
-const _create_cleaning = ({template_id, date_start, date_end}) => {
+const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}) => {
   const stmt = db.prepare(`
     INSERT INTO cleaning 
-    (finished, date_start, date_end, template_rel) VALUES (?, ?, ?, ?)
+    (finished, date_start, date_end, discord_thread_id, template_rel) VALUES (?, ?, ?, ?, ?)
   `);
-  const info = stmt.run(0, date_start, date_end, template_id);
+  const info = stmt.run(0, date_start, date_end, discord_thread_id, template_id);
   return info;
+}
+
+// TODO(Sigull): Have group id to delete them all at the same time.
+/**
+ * Creates cleaning entries based on a template and a list of date ranges.
+ *
+ * @param {Object} input - The destructured input object.
+ * @param {Array<[string, string, string, string]>} input.cleaning_list - [{template_id, start_date, end_date, discord_thread_id}], date YYYY-MM-DD.
+ */
+const _create_cleanings = ({cleaning_list}) => {
+  const sync_transaction = db.transaction((cleaning_list) => {
+    for (const c of cleaning_list) {
+      create_cleaning_logged({template_id: c.template_id, date_start: c.date_start, 
+                              date_end: c.date_end, discord_thread_id: c.discord_thread_id});
+    }
+  });
+
+  sync_transaction(cleaning_list);
 }
 
 const _create_cleaning_template = ({max_users, place, name, instructions}) => {
@@ -176,6 +194,12 @@ const _log_cleaning_created = (prev_ret, {template_id, date_start, date_end}) =>
   send_log(log_message)
 }
 
+const _log_cleanings_created = (prev_ret, {cleanings}) => {
+  let log_message = `Finished create group of cleanings.`;
+
+  send_log(log_message);
+}
+
 const _log_template_created = (prev_ret, { name }) => {
   let log_message = `Created template ${name}`; 
   send_log(log_message);
@@ -188,7 +212,8 @@ const _log_add_update_user = (prev_ret, { discord_id, name, has_role }) => {
     send_log(log_message);
 
   // Just nickname change
-  } else if (info.changes > 0) {
+  } else if (prev_ret.changes > 0) {
+    // TODO(Sigull): Something is wrong.
     console.log(`${discord_id} changed their nickname`);
   }
 }
@@ -223,6 +248,7 @@ const with_logging = (task_fn, log_fn) => {
 
 // TODO(Sigull): Have better return value -> research how js does errors
 export const create_cleaning_logged     = with_logging(_create_cleaning, _log_cleaning_created);
+export const create_cleanings_logged    = with_logging(_create_cleanings, _log_cleanings_created);
 export const create_template_logged     = with_logging(_create_cleaning_template, _log_template_created);
 export const add_update_user_logged     = with_logging(_add_update_user, _log_add_update_user);
 export const user_join_cleaning_logged  = with_logging(_user_join_cleaning, _log_user_join_cleaning);
@@ -252,7 +278,7 @@ export function get_cleanings(start_date, end_date) {
 
     let sql = `
       SELECT 
-          c.id, c.finished, c.date_start, c.date_end, c.discord_thread, c.template_rel, 
+          c.id, c.finished, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
           t.max_users, t.place, t.name, t.instructions,
           -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
           '[' || IFNULL(
@@ -304,7 +330,7 @@ export function get_cleaning_by_id(cleaning_id) {
   try {
     const sql = `
       SELECT 
-          c.id, c.finished, c.date_start, c.date_end, c.discord_thread, c.template_rel, 
+          c.id, c.finished, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
           t.max_users, t.place, t.name, t.instructions,
           '[' || IFNULL(
               GROUP_CONCAT(

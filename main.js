@@ -1,6 +1,7 @@
 // BOT
 import { get_cleanings, add_update_user_logged, create_cleaning_logged, get_templates,
-  create_template_logged, db_init, sync_users, user_join_cleaning_logged, user_leave_cleaning_logged } from './db.js';
+  create_template_logged, db_init, sync_users, user_join_cleaning_logged, user_leave_cleaning_logged, 
+  create_cleanings_logged} from './db.js';
 import { seed_cleanings } from './testing.js';
 
 import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
@@ -20,16 +21,6 @@ const bot = new CommandClient(process.env.BOT_TOKEN, {
     owner: "somebody",
     prefix: "!"
 });
-
-bot.createThread = async (channel_id) => {
-  bot.createThread(channel_id, {
-    name: "Cleaning",
-    type: 12,
-    autoArchiveDuration: 60
-  }).then(thread => {
-      thread.createMessage("Welcome to the new thread!");
-  });
-}
 
 bot.send = async (channel, message) => {
   return bot.createMessage(channel, message, null);
@@ -56,6 +47,7 @@ bot.send_notification = async () => {
 const formatDate = (date) => date.toISOString().split('T')[0];
 
 // get all cleanings from previous, this, next weeks
+// TODO(Sigull): How to handle old cleanings which weren't done.
 function get_cleanings_notify() {
   const now = new Date();
   const currentDay = now.getDay(); 
@@ -92,6 +84,8 @@ function get_cleanings_notify() {
     return !element.finished;
   });
 
+  console.log("Fetched cleanings from previous, this and next to notify.");
+
   return {
     previous: previous_week_cleanings,
     current: this_week_cleanings,
@@ -101,7 +95,8 @@ function get_cleanings_notify() {
 
 function schedule_send_notification_event() {
   // TODO(Sigull): Change for prod
-  schedule('47 5 * * *', () => {
+  let when = '47 5 * * *';
+  schedule(when, () => {
     cleanings = check_which_cleanings_notify();
     bot.send_notification();
   
@@ -109,12 +104,14 @@ function schedule_send_notification_event() {
     scheduled: true,
     timezone: "Europe/Prague"
   });
+
+  console.log(`Scheduled notification cron for ${when}.`);
 }
 
-function startup_bot() {
+async function startup_bot() {
   bot.guild_fetched = bot.guilds.get(GUILD_ID);
   schedule_send_notification_event();
-  sync_users(bot.guild_fetched);
+  await sync_users(bot.guild_fetched);
   // TODO(Sigull): temp
   seed_cleanings();
   get_cleanings_notify();
@@ -193,8 +190,9 @@ async function main() {
 
   // TODO(Sigull): Help command
   bot.on("ready", async () => {
-    register_commands([...public_commands, ...manager_commands]);
-    startup_bot();
+    await register_commands([...public_commands, ...manager_commands]);
+    await startup_bot();
+    console.log("Bot startup finished.");
   });
 
   bot.on("interactionCreate", async (interaction) => {
@@ -297,7 +295,7 @@ async function handle_create_cleaning_command(msg) {
   let template_name_id_pairs = []
 
   for (const t of templates) {
-    template_name_id_pairs.push({"label": t.name, "value": t.id});
+    template_name_id_pairs.push({"label": t.name, "value": `{"id": "${t.id}", "name": "${t.name}"}`});
   }
 
   await msg.createModal({
@@ -309,7 +307,7 @@ async function handle_create_cleaning_command(msg) {
         "label": "Cleaning template.",
         "component": {
           "type": 3,
-          "custom_id": "template_id",
+          "custom_id": "template",
           "placeholder": "Select a template...",
           "options": template_name_id_pairs,
         }
@@ -362,6 +360,8 @@ async function handle_create_cleaning_command(msg) {
   });
 }
 
+// TODO(Sigull): It is possible to send any/malformed modal with the same custom id.
+//               Don't know if that is am issue.
 async function handle_create_template_command(msg) {
   await msg.createModal({
     "title": "Cleaning template",
@@ -453,13 +453,19 @@ function increment_week(date_string) {
 
 async function handle_create_cleaning_modal(modal) {
   let res = modal.data.components;
-  let template_id, date_start, date_end, repetitions;
+  let template_id, date_start, date_end, repetitions, template_name;
+
+  // Creating threads takes time.
+  // This gives 15 minutes before command timeout.
+  await modal.defer(64);
 
   // TODO(Sigull): Maybe just use a map and check validity later.
   for (const c of res) {
     switch(c.component.custom_id) {
-      case "template_id":
-        template_id = c.component.values[0];
+      case "template":
+        let parsed = JSON.parse(c.component.values[0]);
+        template_id = parsed.id;
+        template_name = parsed.name;
         break;
       case "start_date":
         date_start = c.component.value;
@@ -475,11 +481,28 @@ async function handle_create_cleaning_modal(modal) {
 
   // TODO(Sigull): Do this as transaction. If one fails all fail.
   // TODO(Sigull): Have a simple way to remove all at once.
+  let cleaning_list = []
   for (let i=0; i < repetitions; i++) {
-    create_cleaning_logged({template_id, date_start, date_end});
+    let day_start = date_start.slice(5).split('-')[1];
+    let date_start_str = `${day_start}. ${date_start.slice(5).split('-')[0]}.`;
+    
+    let day_end = date_end.slice(5).split('-')[1];
+    let date_end_str = `${day_end}. ${date_end.slice(5).split('-')[0]}.`;
+     
+    let thread_name = `${template_name} ${date_start_str} - ${date_end_str}`;
+    // type 12 is private thread
+    let thread_channel = await bot.createThread(
+      TEST_CH, {invitable: false, name: thread_name, type: 12}
+    );
+
+    cleaning_list.push({template_id: template_id, date_start: date_start, 
+                        date_end: date_end, discord_thread_id: thread_channel.id});
+
     date_start = increment_week(date_start);
     date_end = increment_week(date_end);
   }
+
+  create_cleanings_logged({cleaning_list});
 
   await modal.createMessage("Cleaning/s created.")
 }

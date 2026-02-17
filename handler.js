@@ -1,6 +1,4 @@
-import { get_cleanings, add_update_user_logged, create_cleaning_logged, get_templates,
-  create_template_logged, db_init, sync_users, user_join_cleaning_logged, user_leave_cleaning_logged, 
-  create_cleanings_logged} from './db.js';
+import * as db from './db.js';
 import { generate_cleaning_report_image } from './timetable_generate.js';
 import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
@@ -81,12 +79,24 @@ export async function report_command(msg) {
   await msg.createMessage("Generated report.");
 }
 
+function invite_to_cleaning_thread(cleaning_id, member_id) {
+  let cleaning = db.get_cleaning_by_id(cleaning_id);
+  bot.createMessage(cleaning.id, `<@${member_id}> se připojil.`, null);
+}
+
+async function kick_from_cleaning_thread(cleaning_id, member_id) {
+  let cleaning = db.get_cleaning_by_id(cleaning_id);
+  await bot.createMessage(cleaning.id, `<@${member_id} se odpojil.`, null);
+  bot.removeThreadMember(cleaning.discord_thread_id, member_id);
+}
+
 export async function join_command(msg) {
   let member_id = msg.member.id;
   let cleaning_id = msg.data.options[0].value;
 
   try {
-    user_join_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+    db.user_join_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+    invite_to_cleaning_thread(cleaning_id, member_id);
 
   } catch (err) {
     console.log(err);
@@ -100,84 +110,14 @@ export async function leave_command(msg) {
   let cleaning_id = msg.data.options[0].value;
 
   try {
-    user_leave_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+    db.user_leave_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+    kick_from_cleaning_thread(cleaning_id, member_id);
 
   } catch (err) {
     console.log(err);
   }
 
   await msg.createMessage("Left cleaning.");
-}
-
-// TODO(Sigull): Add a way to show templates in a more whole way.
-export async function create_cleaning_command(msg) {
-  let templates = get_templates();
-  let template_name_id_pairs = []
-
-  for (const t of templates) {
-    template_name_id_pairs.push({"label": t.name, "value": `{"id": "${t.id}", "name": "${t.name}"}`});
-  }
-
-  await msg.createModal({
-    "title": "Cleaning",
-    "custom_id": "create_cleaning",
-    "components": [
-      {
-        "type": 18,
-        "label": "Cleaning template.",
-        "component": {
-          "type": 3,
-          "custom_id": "template",
-          "placeholder": "Select a template...",
-          "options": template_name_id_pairs,
-        }
-      },
-      {
-        "type": 18,
-        "label": "Start date.",
-        "component": {
-          "type": 4,
-          "custom_id": "start_date",
-          "style": 1,
-          "placeholder": "YYYY-MM-DD",
-        }
-      },
-      {
-        "type": 18,
-        "label": "End date.",
-        "component": {
-          "type": 4,
-          "custom_id": "end_date",
-          "style": 1,
-          "placeholder": "YYYY-MM-DD"
-        }
-      },
-      {
-        "type": 18,
-        "label": "Number of repetitions.",
-        "component": {
-          "type": 3,
-          "custom_id": "repetitions",
-          "placeholder": "Select a number...",
-          "options": [
-            { "label": "1",  "value": 1  },
-            { "label": "2",  "value": 2  },
-            { "label": "3",  "value": 3  },
-            { "label": "4",  "value": 4  },
-            { "label": "5",  "value": 5  },
-            { "label": "6",  "value": 6  },
-            { "label": "7",  "value": 7  },
-            { "label": "8",  "value": 8  },
-            { "label": "9",  "value": 9  },
-            { "label": "10", "value": 10 },
-            { "label": "11", "value": 11 },
-            { "label": "12", "value": 12 },
-            { "label": "13", "value": 13 }
-          ]
-        }
-      }
-    ]
-  });
 }
 
 // TODO(Sigull): It is possible to send any/malformed modal with the same custom id.
@@ -242,6 +182,9 @@ export async function create_template_command(msg) {
 export async function create_template_modal(modal) {
   let res = modal.data.components;
   let max_users, place, name, instructions;
+
+  console.log(res);
+
   for (const c of res) {
     switch(c.component.custom_id) {
       case "max_users":
@@ -259,9 +202,80 @@ export async function create_template_modal(modal) {
     }
   }
 
-  create_template_logged({max_users, place, name, instructions});
+  db.create_template_logged({max_users, place, name, instructions});
 
   await modal.createMessage("Cleaning template created.");
+}
+
+// TODO(Sigull): Add a way to show templates in a more whole way.
+export async function create_cleaning_command(msg) {
+  let templates = db.get_templates();
+  let template_name_id_pairs = []
+
+  for (const t of templates) {
+    template_name_id_pairs.push({"label": t.name, "value": t.id});
+  }
+
+  await msg.createModal({
+    "title": "Cleaning",
+    "custom_id": "create_cleaning",
+    "components": [
+      {
+        "type": 18,
+        "label": "Cleaning template.",
+        "component": {
+          "type": 3,
+          "custom_id": "template",
+          "placeholder": "Select a template...",
+          "options": template_name_id_pairs,
+        }
+      },
+      {
+        "type": 18,
+        "label": "Start date.",
+        "component": {
+          "type": 4,
+          "custom_id": "start_date",
+          "style": 1,
+          "placeholder": "YYYY-MM-DD",
+        }
+      },
+      {
+        "type": 18,
+        "label": "End date.",
+        "component": {
+          "type": 4,
+          "custom_id": "end_date",
+          "style": 1,
+          "placeholder": "YYYY-MM-DD"
+        }
+      },
+      {
+        "type": 18,
+        "label": "Number of repetitions.",
+        "component": {
+          "type": 3,
+          "custom_id": "repetitions",
+          "placeholder": "Select a number...",
+          "options": [
+            { "label": "1",  "value": 1  },
+            { "label": "2",  "value": 2  },
+            { "label": "3",  "value": 3  },
+            { "label": "4",  "value": 4  },
+            { "label": "5",  "value": 5  },
+            { "label": "6",  "value": 6  },
+            { "label": "7",  "value": 7  },
+            { "label": "8",  "value": 8  },
+            { "label": "9",  "value": 9  },
+            { "label": "10", "value": 10 },
+            { "label": "11", "value": 11 },
+            { "label": "12", "value": 12 },
+            { "label": "13", "value": 13 }
+          ]
+        }
+      }
+    ]
+  });
 }
 
 function increment_week(date_string) {
@@ -273,7 +287,9 @@ function increment_week(date_string) {
 
 export async function create_cleaning_modal(modal) {
   let res = modal.data.components;
-  let template_id, date_start, date_end, repetitions, template_name;
+  let template_id, date_start, date_end, repetitions;
+
+  console.log(res);
 
   // Creating threads takes time.
   // This gives 15 minutes before command timeout.
@@ -283,9 +299,7 @@ export async function create_cleaning_modal(modal) {
   for (const c of res) {
     switch(c.component.custom_id) {
       case "template":
-        let parsed = JSON.parse(c.component.values[0]);
-        template_id = parsed.id;
-        template_name = parsed.name;
+        template_id = c.component.values[0];
         break;
       case "start_date":
         date_start = c.component.value;
@@ -299,6 +313,8 @@ export async function create_cleaning_modal(modal) {
     }
   }
 
+  let template = db.get_template_by_id(template_id);
+
   // TODO(Sigull): Do this as transaction. If one fails all fail.
   // TODO(Sigull): Have a simple way to remove all at once.
   let cleaning_list = []
@@ -309,11 +325,12 @@ export async function create_cleaning_modal(modal) {
     let day_end = date_end.slice(5).split('-')[1];
     let date_end_str = `${day_end}. ${date_end.slice(5).split('-')[0]}.`;
      
-    let thread_name = `${template_name} ${date_start_str} - ${date_end_str}`;
+    let thread_name = `${template.name} ${date_start_str} - ${date_end_str}`;
     // type 12 is private thread
     let thread_channel = await bot.createThread(
       TEST_CH, {invitable: false, name: thread_name, type: 12}
     );
+    bot.createMessage(thread_channel.id, template.instructions, null);
 
     cleaning_list.push({template_id: template_id, date_start: date_start, 
                         date_end: date_end, discord_thread_id: thread_channel.id});
@@ -322,7 +339,7 @@ export async function create_cleaning_modal(modal) {
     date_end = increment_week(date_end);
   }
 
-  create_cleanings_logged({cleaning_list});
+  db.create_cleanings_logged({cleaning_list});
 
   await modal.createMessage("Cleaning/s created.")
 }

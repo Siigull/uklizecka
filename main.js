@@ -1,7 +1,5 @@
 // BOT
-import { get_cleanings, add_update_user_logged, create_cleaning_logged, get_templates,
-  create_template_logged, db_init, sync_users, user_join_cleaning_logged, user_leave_cleaning_logged, 
-  create_cleanings_logged} from './db.js';
+import * as db from './db.js';
 import { seed_cleanings } from './testing.js';
 import * as handler from './handler.js';
 
@@ -70,9 +68,9 @@ function get_cleanings_notify() {
   endNextWeek.setDate(startNextWeek.getDate() + 6);
 
   // Fetch
-  let previous_week_cleanings = get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
-  let this_week_cleanings     = get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
-  let next_week_cleanings     = get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
+  let previous_week_cleanings = db.get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
+  let this_week_cleanings     = db.get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
+  let next_week_cleanings     = db.get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
 
   // Get only unfinished
   previous_week_cleanings = previous_week_cleanings.filter((element, index, _) => {
@@ -112,9 +110,9 @@ function schedule_send_notification_event() {
 async function startup_bot() {
   bot.guild_fetched = bot.guilds.get(GUILD_ID);
   schedule_send_notification_event();
-  await sync_users(bot.guild_fetched);
+  await db.sync_users(bot.guild_fetched);
   // TODO(Sigull): temp
-  seed_cleanings();
+  seed_cleanings(bot);
   get_cleanings_notify();
 }
 
@@ -129,7 +127,7 @@ async function register_commands(commands) {
 }
 
 async function main() {
-  db_init(bot);
+  db.init(bot);
 
   handler.handlers_init(bot); 
 
@@ -184,11 +182,11 @@ async function main() {
     let has_cleaning_role = member.roles.includes(CLEANING_ROLE);
     // -- Nickname change
     if (oldMember.nick != member.nick) {
-      add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
+      db.add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
     
     // -- User got 'access to club' role
     } else if (!oldMember.roles.includes(CLEANING_ROLE) && has_cleaning_role) {
-      add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
+      db.add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
     }
   });
 

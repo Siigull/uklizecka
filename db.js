@@ -5,7 +5,7 @@ import { CLEANING_ROLE } from './config.js';
 
 let bot;
 
-export function db_init(bot_instance) {
+export function init(bot_instance) {
   bot = bot_instance;
 
   db.prepare(`CREATE TABLE IF NOT EXISTS template_cleaning (
@@ -385,4 +385,12 @@ export function get_templates() {
     console.error("get_templates error:", err);
     return [];
   }
+}
+
+export function get_template_by_id(template_id) {
+  const stmt = db.prepare(`
+    SELECT * FROM template_cleaning t 
+    WHERE t.id = ?
+  `);
+  return stmt.get(template_id);
 }

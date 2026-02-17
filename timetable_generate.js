@@ -1,4 +1,4 @@
-import { get_cleanings } from './db.js';
+import * as db from './db.js';
 
 import { createCanvas } from 'canvas';
 
@@ -9,7 +9,7 @@ import { createCanvas } from 'canvas';
  * @param {string} end_str - Interval end (YYYY-MM-DD)
  */
 export async function generate_cleaning_report_image(start_str, end_str) {
-  const cleanings = get_cleanings(start_str, end_str);
+  const cleanings = db.get_cleanings(start_str, end_str);
   if (cleanings.length === 0) return null;
 
   const getMonday = (d) => {

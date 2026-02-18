@@ -109,6 +109,27 @@ const _create_cleaning_template = ({max_users, place, name, instructions}) => {
   return info;
 };
 
+const _finish_cleaning = ({member_id, cleaning_id}) => {
+  // Check if member is a participant in the cleaning
+  const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(member_id);
+  if (!user) {
+    throw new Error(`User with discord_id ${member_id} not found.`);
+  }
+  const participant = db.prepare(`
+    SELECT 1 FROM cleaning_participants WHERE cleaning_id = ? AND user_id = ?
+  `).get(cleaning_id, user.id);
+  if (!participant) {
+    throw new Error(`User with discord_id ${member_id} is not a participant in cleaning ${cleaning_id}.`);
+  }
+  const stmt = db.prepare(`
+    UPDATE cleaning
+    SET finished = 1
+    WHERE id = ?
+  `);
+  const info = stmt.run(cleaning_id);
+  return info;
+}
+
 const _add_update_user = ({discord_id, name, has_role}) => {
   const stmt = db.prepare(`
     INSERT INTO users (discord_id, name, has_role)
@@ -204,6 +225,11 @@ const _log_template_created = (prev_ret, { name }) => {
   send_log(log_message);
 };
 
+const _log_finish_cleaning = (prev_ret, { cleaning_id }) => {
+  let log_message = `Finished cleaning with id ${cleaning_id}`;
+  send_log(log_message);
+};
+
 const _log_add_update_user = (prev_ret, { discord_id, name, has_role }) => {
   // New user was added
   if (prev_ret.changes > 0 && prev_ret.lastInsertRowid > 0) {
@@ -245,10 +271,10 @@ const with_logging = (task_fn, log_fn) => {
   };
 };
 
-// TODO(Sigull): Have better return value -> research how js does errors
 export const create_cleaning_logged     = with_logging(_create_cleaning, _log_cleaning_created);
 export const create_cleanings_logged    = with_logging(_create_cleanings, _log_cleanings_created);
 export const create_template_logged     = with_logging(_create_cleaning_template, _log_template_created);
+export const finish_cleaning_logged     = with_logging(_finish_cleaning, _log_finish_cleaning);
 export const add_update_user_logged     = with_logging(_add_update_user, _log_add_update_user);
 export const user_join_cleaning_logged  = with_logging(_user_join_cleaning, _log_user_join_cleaning);
 export const user_leave_cleaning_logged = with_logging(_user_leave_cleaning, _log_user_leave_cleaning);
@@ -268,7 +294,6 @@ export function get_users() {
 }
 
 // TODO(Sigull): Count to how many cleanings a user is assigned.
-// TODO(Sigull): Think about permissions.
 
 // Get functions
 export function get_cleanings(start_date, end_date) {

@@ -5,6 +5,29 @@ import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } fr
 let bot;
 export let public_commands;
 export let manager_commands;
+export let manager_interactions;
+export let button_commands;
+
+function md_report(func) {
+  return async (arg) => {
+    await func(arg);
+    bot.send_report();
+  }
+}
+
+function md_err(func) {
+  return async (arg) => {
+    try {
+      await func(arg);
+    } catch(err) {
+      console.log("Handler error: " + err);
+      await arg.createMessage({
+        content: err,
+        flags: 64,
+      });
+    }
+  }
+}
 
 export function handlers_init(bot_instance) {
     bot = bot_instance;
@@ -15,7 +38,7 @@ export function handlers_init(bot_instance) {
             description: "Sends table of cleanings.",
             fullDescription: "Sends table of cleanings from this semester. The table is sent as a generated image.",
             type: 1,
-            handler_function: report_command,
+            handler_function: md_err(report_command),
         },
         {
             name: "join",
@@ -27,7 +50,7 @@ export function handlers_init(bot_instance) {
             type: 4,
             required: true
             }],
-            handler_function: join_command,
+            handler_function: md_report(md_err(join_command)),
         },
         {
             name: "leave",
@@ -39,7 +62,7 @@ export function handlers_init(bot_instance) {
             type: 4,
             required: true
             }],
-            handler_function: leave_command,
+            handler_function: md_report(md_err(leave_command)),
         },
     ];
 
@@ -50,15 +73,33 @@ export function handlers_init(bot_instance) {
             description: "Create template for cleaning.",
             fullDescription: "Create template for cleaning through discord modal functionality as a form.",
             type: 1,
-            handler_function: create_template_command,
+            handler_function: md_err(create_template_command),
         },
         {
             name: "create-cleaning",
             description: "Create cleaning from template",
             fullDescription: "Create cleaning through discord modal functionality as a form where template is selected.",
             type: 1,
-            handler_function: create_cleaning_command,
+            handler_function: md_err(create_cleaning_command),
         },
+      ];
+      
+    manager_interactions = [
+      {
+        name: "create-template-modal",
+        handler_function: md_report(md_err(create_template_modal)),
+      },
+      {
+        name: "create-cleaning-modal",
+        handler_function: md_report(md_err(create_cleaning_modal)),
+      },
+    ];
+
+    button_commands = [
+      {
+        name: "Byl úklid dokončen?",
+        handler_function: md_report(md_err(finish_cleaning_buttons)),
+      }
     ];
 }
 
@@ -122,8 +163,6 @@ export async function leave_command(msg) {
   await msg.createMessage({ content: "Left cleaning.", flags: 64 });
 }
 
-// TODO(Sigull): It is possible to send any/malformed modal with the same custom id.
-//               Don't know if that is am issue.
 export async function create_template_command(msg) {
   await msg.createModal({
     "title": "Cleaning template",
@@ -340,4 +379,25 @@ export async function create_cleaning_modal(modal) {
   db.create_cleanings_logged({cleaning_list});
 
   await modal.createMessage({ content: "Cleaning/s created.", flags: 64});
+}
+
+export async function finish_cleaning_buttons(buttons) {
+  // twice components because buttons are in action row
+  let button_clicked = buttons.data.custom_id;
+  let finish_button, cleaning_id;
+
+  if(button_clicked.startsWith("finished")) {
+    cleaning_id = button_clicked.split(" ")[1];
+    finish_button = true;
+  }
+
+  if (!finish_button || !cleaning_id) {
+    throw new Error("Buttons data malformed.");
+  }
+
+  let member_id = buttons.member.id;
+
+  db.finish_cleaning_logged({member_id, cleaning_id});
+
+  await buttons.createMessage({ content: "Cleaning finished." });
 }

@@ -2,6 +2,7 @@
 import * as db from './db.js';
 import { seed_cleanings } from './testing.js';
 import * as handler from './handler.js';
+import { generate_cleaning_report_image } from './timetable_generate.js';
 
 import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
@@ -39,32 +40,50 @@ bot.send_imp_log = async (message) => {
   })
 }
 
-bot.send_notification = async () => {
-  return bot.send(TEST_CH, "ee").catch(err => {
-    console.log("Unauthorized to send message: ", err);
-  })
-}
-
 bot.send_report = async () => {
   if (!report_message_id) {
-    bot.getMessages(TEST_CH, { limit: 50 })
-      .then((messages) => {
-        const target = messages.find(m => m.content.includes("**Cleaning Schedule Overview**"));
-        if (target) {
-          bot.deleteMessage(TEST_CH, target.id, "Report refresh.");
-        }
-      });
-  } else {
-    bot.deleteMessage(TEST_CH, report_message_id, "Report refresh.");
+    let messages = await bot.getMessages(TEST_CH, { limit: 50 })
+    const target = messages.find(m => m.content.includes("**Cleaning Schedule Overview**"));
+    if(target) {
+      report_message_id = target.id; 
+    }
   }
-
   const report = await generate_cleaning_report_image('2026-01-11', '2026-03-18');
       
   const report_message = await bot.createMessage(TEST_CH, {
     content: "📋 **Cleaning Schedule Overview**",
   }, report);
 
+  if (report_message_id) {
+    bot.deleteMessage(TEST_CH, report_message_id, "Report refresh.");
+  }
+
+  console.log("Refreshed report.");
+
   report_message_id = report_message.id;
+}
+
+bot.send_confirm_finished = async (cleaning_id) => {
+  let cleaning = db.get_cleaning_by_id(cleaning_id);
+  bot.createMessage(cleaning.discord_thread_id,
+    { 
+      content: "Byl úklid dokončen?",
+      components: [
+        {
+          type: 1,
+          custom_id: "confirm_cleaning",
+          components: [
+            {
+              type: 2,
+              label: "Dokončen",
+              style: 3,
+              custom_id: `finished ${cleaning.id}`,
+            },
+          ]
+        }
+      ]
+    }
+  );
 }
 
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -92,31 +111,31 @@ function get_cleanings_notify() {
   endNextWeek.setDate(startNextWeek.getDate() + 6);
 
   // Fetch
-  let previous_week_cleanings = db.get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
-  let this_week_cleanings     = db.get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
-  let next_week_cleanings     = db.get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
+  let previous_week = db.get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
+  let this_week     = db.get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
+  let next_week     = db.get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
 
   // Get only unfinished
-  previous_week_cleanings = previous_week_cleanings.filter((element, index, _) => {
+  previous_week = previous_week.filter((element, index, _) => {
     return !element.finished;
   });
-  this_week_cleanings = this_week_cleanings.filter((element, index, _) => {
+  this_week = this_week.filter((element, index, _) => {
     return !element.finished;
   });
-  next_week_cleanings = next_week_cleanings.filter((element, index, _) => {
+  next_week = next_week.filter((element, index, _) => {
     return !element.finished;
   });
 
   console.log("Fetched cleanings from previous, this and next to notify.");
 
   return {
-    previous: previous_week_cleanings,
-    current: this_week_cleanings,
-    next: next_week_cleanings
+    previous: previous_week,
+    current: this_week,
+    next: next_week,
   };
 }
 
-function schedule_generate_report() {
+function schedule_refresh_report() {
   let when = '0 * * * *';
   schedule(when, () => {
     bot.send_report();
@@ -133,8 +152,8 @@ function schedule_send_notification_event() {
   // TODO(Sigull): Change for prod
   let when = '47 5 * * *';
   schedule(when, () => {
-    cleanings = check_which_cleanings_notify();
-    bot.send_notification();
+    cleanings = get_cleanings_notify();
+    // TODO(Sigull): ash
   
   }, {
     scheduled: true,
@@ -147,11 +166,17 @@ function schedule_send_notification_event() {
 async function startup_bot() {
   bot.guild_fetched = bot.guilds.get(GUILD_ID);
   schedule_send_notification_event();
-  schedule_generate_report();
+  schedule_refresh_report();
   await db.sync_users(bot.guild_fetched);
   // TODO(Sigull): temp
-  seed_cleanings(bot);
-  get_cleanings_notify();
+  await seed_cleanings(bot);
+  let cleanings = get_cleanings_notify();
+  cleanings.current.forEach((element) => {
+    let cleaning_id = element.id;
+    bot.send_confirm_finished(cleaning_id);
+  });
+
+  await bot.send_report();
 }
 
 async function register_commands(commands) {
@@ -179,7 +204,7 @@ async function main() {
   // -- Slash commands
   bot.on("interactionCreate", async (interaction) => {
     if (interaction.data) {
-      // TODO(Sigull): Give error to end user. 
+      // TODO(Sigull): Move permissions into middleware.
 
       // -- Public commands
       let public_command = handler.public_commands.find(c => c.name === interaction.data.name);
@@ -192,25 +217,38 @@ async function main() {
       let manager_command = handler.manager_commands.find(c => c.name === interaction.data.name);
       if (manager_command && manager_command.handler_function) {
         if (!interaction.member.roles.some(r => r === MANAGER_ROLE)) {
-            await interaction.createMessage("[ERROR]: Must be cleaning manager to use this command.");
+            await interaction.createMessage({
+              content: "[ERROR]: Must be cleaning manager to use this command.",
+              flags: 64,
+            });
         } else {
           manager_command.handler_function(interaction);
         }
         return;
       }
 
-      // -- Return from modals
-      switch(interaction.data.custom_id) {
-        case "create_template":
-          handler.create_template_modal(interaction);
-          return;
-
-        case "create_cleaning":
-          handler.create_cleaning_modal(interaction);
-          return;
+      // -- Manager interactions (modals)
+      let manager_interaction = handler.manager_interactions.find(c => c.name === interaction.data.custom_id);
+      if (manager_interaction && manager_interaction.handler_function) {
+        if (!interaction.member.roles.some(r => r === MANAGER_ROLE)) {
+            await interaction.createMessage({
+              content: "[ERROR]: Must be cleaning manager to use this interaction.",
+              flags: 64,
+            });
+        } else {
+          manager_interaction.handler_function(interaction);
+        }
+        return;
       }
 
-      console.error(`Command ${interaction.data.name} not implemented.`);
+      // -- Return from buttons
+      let button_command = handler.button_commands.find(c => c.name === interaction.message.content);
+      if (button_command && button_command.handler_function) {
+        button_command.handler_function(interaction);
+        return;
+      }
+
+      console.error(`Command ${interaction} not implemented.`);
     }
   });
 

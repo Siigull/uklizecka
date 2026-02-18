@@ -11,5 +11,6 @@ needing to ask every other person if they can confirm it.
 
 TODO(Sigull): Should have two levels of logging. Unassigning is important.
 TODO(Sigull): Feature(Splitting cleaning into smaller parts).
+TODO(Sigull): Show all templates and their instructions command.
 
 node --env-file=.env main.js

@@ -158,7 +158,7 @@ const _user_join_cleaning = ({discord_id, cleaning_id}) => {
   if (cleaning.finished) {
     throw new Error(`Can't join finished cleaning with id: ${cleaning_id}`);
   }
-  if (cleaning.users.length >= cleaning.max_users) {
+  if (cleaning.users.length >= cleaning.template.max_users) {
     throw new Error(`Can't join full cleaning with id: ${cleaning_id}.`)
   }
 
@@ -317,7 +317,7 @@ export function get_cleanings(start_date, end_date) {
       LEFT JOIN template_cleaning t ON c.template_rel = t.id
       LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
       LEFT JOIN users u ON cp.user_id = u.id
-      WHERE c.date_start BETWEEN ? AND ?
+      WHERE c.date_start >= ? AND c.date_end <= ?
       GROUP BY c.id;
     `;
 

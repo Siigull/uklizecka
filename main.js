@@ -63,6 +63,7 @@ bot.send_report = async () => {
   report_message_id = report_message.id;
 }
 
+// TODO(Sigull): When older and finish not available, it should be there.
 bot.send_confirm_finished = async (cleaning_id) => {
   let cleaning = db.get_cleaning_by_id(cleaning_id);
   bot.createMessage(cleaning.discord_thread_id,
@@ -86,6 +87,18 @@ bot.send_confirm_finished = async (cleaning_id) => {
   );
 }
 
+bot.send_warning_unfinished = async (cleaning_id) => {
+  let cleaning = db.get_cleaning_by_id(cleaning_id);
+  let members_ping = "";
+  for (const user of cleaning.users) {
+    members_ping += `<@${user.discord_id}>`;
+  }
+  // TODO(Sigull): Reference message with confirm.
+  await bot.createMessage(cleaning.discord_thread_id,
+    "Připomínka: úklid není dokončen/potvrzen \n" + members_ping,
+  );
+}
+
 const formatDate = (date) => date.toISOString().split('T')[0];
 
 // get all cleanings from previous, this, next weeks
@@ -95,19 +108,19 @@ function get_cleanings_notify() {
   const currentDay = now.getDay(); 
   const diffToMon = currentDay === 0 ? -6 : 1 - currentDay;
   
-  const startThisWeek = new Date(now);
+  let startThisWeek = new Date(now);
   startThisWeek.setDate(now.getDate() + diffToMon);
-  const endThisWeek = new Date(startThisWeek);
+  let endThisWeek = new Date(startThisWeek);
   endThisWeek.setDate(startThisWeek.getDate() + 6);
 
-  const startPrevWeek = new Date(startThisWeek);
+  let startPrevWeek = new Date(startThisWeek);
   startPrevWeek.setDate(startThisWeek.getDate() - 7);
-  const endPrevWeek = new Date(startPrevWeek);
+  let endPrevWeek = new Date(startPrevWeek);
   endPrevWeek.setDate(startPrevWeek.getDate() + 6);
 
-  const startNextWeek = new Date(startThisWeek);
+  let startNextWeek = new Date(startThisWeek);
   startNextWeek.setDate(startThisWeek.getDate() + 7);
-  const endNextWeek = new Date(startNextWeek);
+  let endNextWeek = new Date(startNextWeek);
   endNextWeek.setDate(startNextWeek.getDate() + 6);
 
   // Fetch
@@ -150,9 +163,17 @@ function schedule_refresh_report() {
 
 function schedule_send_notification_event() {
   // TODO(Sigull): Change for prod
-  let when = '47 5 * * *';
+  let when = '0 10 * * 1';
   schedule(when, () => {
     cleanings = get_cleanings_notify();
+    cleanings.current.forEach((element) => {
+      let cleaning_id = element.id;
+      bot.send_confirm_finished(cleaning_id);
+    });
+    cleanings.previous.forEach((element) => {
+      let cleaning_id = element.id;
+      bot.send_warning_unfinished(cleaning_id);
+    });
     // TODO(Sigull): ash
   
   }, {
@@ -174,6 +195,10 @@ async function startup_bot() {
   cleanings.current.forEach((element) => {
     let cleaning_id = element.id;
     bot.send_confirm_finished(cleaning_id);
+  });
+  cleanings.previous.forEach((element) => {
+    let cleaning_id = element.id;
+    bot.send_warning_unfinished(cleaning_id);
   });
 
   await bot.send_report();
@@ -255,7 +280,7 @@ async function main() {
   // TODO(Sigull): Maybe also when removal of roles.
   // -- User syncing to database
   bot.on("guildMemberUpdate", (guild, member, oldMember) => {
-    let has_cleaning_role = member.roles.includes(CLEANING_ROLE);
+    let has_cleaning_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
     // -- Nickname change
     if (oldMember.nick != member.nick) {
       db.add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});

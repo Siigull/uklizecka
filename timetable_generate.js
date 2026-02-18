@@ -43,7 +43,7 @@ export async function generate_cleaning_report_image(start_str, end_str) {
   // Layout Constants
   const sidebarWidth = 350;
   const weekWidth = 750; 
-  const rowHeight = 220; // Increased to fit status, capacity, and several names comfortably
+  const rowHeight = 230; // Increased to fit status, capacity, and up to 6 names comfortably
   const headerHeight = 100;
   const padding = 60;
 
@@ -118,21 +118,51 @@ export async function generate_cleaning_report_image(start_str, end_str) {
       const blockH = rowHeight - 40;
 
       // Draw Pill
-      ctx.fillStyle = c.finished ? '#43b581' : '#f04747';
+      if (c.finished) {
+        ctx.fillStyle = '#3b82f6'; // blue
+      } else {
+        // Improved color gradient: red (empty) -> orange/yellow (half) -> green (full)
+        const joined = c.users.length;
+        const max = template.max_users || 1;
+        const ratio = Math.max(0, Math.min(1, joined / max));
+        // Gradient stops:
+        // 0.0: #f04747 (red)
+        // 0.5: #f7b32b (orange/yellow)
+        // 1.0: #43b581 (green)
+        let r, g, b;
+        if (ratio < 0.5) {
+          // Red to yellow
+          // #f04747 (240,71,71) to #f7b32b (247,179,43)
+          const t = ratio / 0.5;
+          r = Math.round(240 + (247 - 240) * t);
+          g = Math.round(71 + (179 - 71) * t);
+          b = Math.round(71 + (43 - 71) * t);
+        } else {
+          // Yellow to green
+          // #f7b32b (247,179,43) to #43b581 (67,181,129)
+          const t = (ratio - 0.5) / 0.5;
+          r = Math.round(247 + (67 - 247) * t);
+          g = Math.round(179 + (181 - 179) * t);
+          b = Math.round(43 + (129 - 43) * t);
+        }
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+      }
       ctx.beginPath();
       ctx.roundRect(blockX, blockY, blockW, blockH, 20);
       ctx.fill();
 
-      // Top Status Bar (DONE / ID + Count)
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 22px sans-serif';
 
+      // Top Status Bar (DONE / ID) - top left
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 26px sans-serif';
       const statusText = c.finished ? 'DONE' : `#${c.id}`;
+      ctx.textAlign = 'left';
       ctx.fillText(statusText, blockX + 25, blockY + 45);
-      
-      ctx.font = 'bold 18px sans-serif';
+
+      // Users/Max Users - top right, big and bold
+      ctx.font = 'bold 32px sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(`${c.users.length}/${template.max_users}`, blockX + blockW - 25, blockY + 45);
+      ctx.fillText(`${c.users.length}/${template.max_users}`, blockX + blockW - 25, blockY + 46);
       ctx.textAlign = 'left';
 
       // Divider Line inside Pill
@@ -143,19 +173,31 @@ export async function generate_cleaning_report_image(start_str, end_str) {
       ctx.lineTo(blockX + blockW - 20, blockY + 65);
       ctx.stroke();
 
-      // Participant Names
-      ctx.font = '18px sans-serif';
-      const maxDisplay = 4;
+      // Participant Names (up to 6, in two columns of 3 rows, truncate if too long)
+      const maxDisplay = 6;
+      const nameFontSize = 28;
+      ctx.font = `bold ${nameFontSize}px sans-serif`;
+      const nameLineHeight = nameFontSize + 8;
       const displayUsers = c.users.slice(0, maxDisplay);
-      
-      displayUsers.forEach((userObj, uIdx) => {
+
+      // Layout: two columns, three rows
+      const namesPerCol = 3;
+      const nameAreaWidth = blockW - 50;
+      const nameColWidth = (nameAreaWidth - 20) / 2; // 2 columns, 20px gap
+      const colX = [blockX + 25, blockX + 25 + nameColWidth + 20];
+      for (let i = 0; i < displayUsers.length; i++) {
+        const userObj = displayUsers[i];
         const userName = userObj.name || "Unknown";
-        fillTextTruncated(`• ${userName}`, blockX + 25, blockY + 95 + (uIdx * 25), blockW - 50);
-      });
+        const col = Math.floor(i / namesPerCol);
+        const row = i % namesPerCol;
+        const x = colX[col];
+        const y = blockY + 95 + row * nameLineHeight;
+        fillTextTruncated(`• ${userName}`, x, y, nameColWidth - 10);
+      }
 
       if (c.users.length > maxDisplay) {
-        ctx.font = 'italic 16px sans-serif';
-        ctx.fillText(`+ ${c.users.length - maxDisplay} more...`, blockX + 25, blockY + 95 + (maxDisplay * 25));
+        ctx.font = 'italic 20px sans-serif';
+        ctx.fillText(`+ ${c.users.length - maxDisplay} more...`, blockX + 25, blockY + 95 + 3 * nameLineHeight);
       }
     });
     ctx.restore();

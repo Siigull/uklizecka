@@ -120,21 +120,21 @@ export async function seed_cleanings(bot_instance) {
   // --- THIS WEEK ---
   let modal6 = create_cleaning_modal_stub({
     template_id: 1,
-    date_start: "2026-02-9",
+    date_start: "2026-02-09",
     date_end: "2026-02-15",
     repetitions: 1,
   });
   await handler.create_cleaning_modal(modal6);
   let modal7 = create_cleaning_modal_stub({
     template_id: 2,
-    date_start: "2026-02-9",
+    date_start: "2026-02-09",
     date_end: "2026-02-15",
     repetitions: 1,
   });
   await handler.create_cleaning_modal(modal7);
   let modal8 = create_cleaning_modal_stub({
     template_id: 3,
-    date_start: "2026-02-9",
+    date_start: "2026-02-09",
     date_end: "2026-02-15",
     repetitions: 1,
   });
@@ -159,11 +159,24 @@ export async function seed_cleanings(bot_instance) {
   db.add_update_user_logged({discord_id: "1", name: "jedna", has_role: 0});
   db.add_update_user_logged({discord_id: "2", name: "dva",   has_role: 1});
   db.add_update_user_logged({discord_id: "3", name: "tri",   has_role: 1});
+  db.add_update_user_logged({discord_id: "4", name: "ctyri", has_role: 1});
+  db.add_update_user_logged({discord_id: "5", name: "pet",   has_role: 1});
+  db.add_update_user_logged({discord_id: "6", name: "sest",  has_role: 1});
 
   sleep(5000);
 
-  let msg = create_user_join_msg_stub({member_id: "1", cleaning_id: 2});
-  await handler.join_command(msg);
+  let msg1 = create_user_join_msg_stub({member_id: "1", cleaning_id: 3});
+  await handler.join_command(msg1);
+  let msg2 = create_user_join_msg_stub({member_id: "2", cleaning_id: 3});
+  await handler.join_command(msg2);
+  let msg3 = create_user_join_msg_stub({member_id: "3", cleaning_id: 3});
+  await handler.join_command(msg3);
+  let msg4 = create_user_join_msg_stub({member_id: "4", cleaning_id: 3});
+  await handler.join_command(msg4);
+  let msg5 = create_user_join_msg_stub({member_id: "5", cleaning_id: 4});
+  await handler.join_command(msg5);
+  let msg6 = create_user_join_msg_stub({member_id: "6", cleaning_id: 4});
+  await handler.join_command(msg6);
 
   console.log("Seeding complete.");
 }

@@ -352,8 +352,6 @@ export async function create_cleaning_modal(modal) {
 
   let template = db.get_template_by_id(template_id);
 
-  // TODO(Sigull): Do this as transaction. If one fails all fail.
-  // TODO(Sigull): Have a simple way to remove all at once.
   let cleaning_list = []
   for (let i=0; i < repetitions; i++) {
     let day_start = date_start.slice(5).split('-')[1];

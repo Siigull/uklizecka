@@ -67,27 +67,29 @@ export async function report_command(msg) {
     // TODO(Sigull): temp
     const report = await generate_cleaning_report_image('2026-01-11', '2026-03-18');
     
-    await bot.createMessage(msg.channel.id, {
-      content: "📋 **Cleaning Schedule Overview**"
+    await msg.createMessage({
+      content: "📋 **Cleaning Schedule Overview**",
+      flags: 64,
     }, report);
-    
+        
   } catch (err) {
     console.error(err);
-    bot.createMessage(msg.channel.id, "Failed to generate report.");
+    await msg.createMessage(
+      { content: "Failed to generate report.", flags: 64 }
+    );
+    return;
   }
-
-  await msg.createMessage("Generated report.");
 }
 
 function invite_to_cleaning_thread(cleaning_id, member_id) {
   let cleaning = db.get_cleaning_by_id(cleaning_id);
-  bot.createMessage(cleaning.id, `<@${member_id}> se připojil.`, null);
+  bot.createMessage(cleaning.discord_thread_id, `<@${member_id}> se připojil.`, null);
 }
 
 async function kick_from_cleaning_thread(cleaning_id, member_id) {
   let cleaning = db.get_cleaning_by_id(cleaning_id);
-  await bot.createMessage(cleaning.id, `<@${member_id} se odpojil.`, null);
-  bot.removeThreadMember(cleaning.discord_thread_id, member_id);
+  await bot.createMessage(cleaning.discord_thread_id, `<@${member_id}> se odpojil.`, null);
+  bot.leaveThread(cleaning.discord_thread_id, member_id);
 }
 
 export async function join_command(msg) {
@@ -102,7 +104,7 @@ export async function join_command(msg) {
     console.log(err);
   }
 
-  await msg.createMessage("Joined cleaning.")
+  await msg.createMessage({content: "Joined cleaning.", flags: 64 });
 }
 
 export async function leave_command(msg) {
@@ -117,7 +119,7 @@ export async function leave_command(msg) {
     console.log(err);
   }
 
-  await msg.createMessage("Left cleaning.");
+  await msg.createMessage({ content: "Left cleaning.", flags: 64 });
 }
 
 // TODO(Sigull): It is possible to send any/malformed modal with the same custom id.
@@ -183,8 +185,6 @@ export async function create_template_modal(modal) {
   let res = modal.data.components;
   let max_users, place, name, instructions;
 
-  console.log(res);
-
   for (const c of res) {
     switch(c.component.custom_id) {
       case "max_users":
@@ -204,7 +204,7 @@ export async function create_template_modal(modal) {
 
   db.create_template_logged({max_users, place, name, instructions});
 
-  await modal.createMessage("Cleaning template created.");
+  await modal.createMessage({ content: "Cleaning template created.", flags: 64 });
 }
 
 // TODO(Sigull): Add a way to show templates in a more whole way.
@@ -289,8 +289,6 @@ export async function create_cleaning_modal(modal) {
   let res = modal.data.components;
   let template_id, date_start, date_end, repetitions;
 
-  console.log(res);
-
   // Creating threads takes time.
   // This gives 15 minutes before command timeout.
   await modal.defer(64);
@@ -341,5 +339,5 @@ export async function create_cleaning_modal(modal) {
 
   db.create_cleanings_logged({cleaning_list});
 
-  await modal.createMessage("Cleaning/s created.")
+  await modal.createMessage({ content: "Cleaning/s created.", flags: 64});
 }

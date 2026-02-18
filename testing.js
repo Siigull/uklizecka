@@ -3,86 +3,167 @@ import * as handler from "./handler.js";
 
 let bot;
 
-let modal;
+function create_template_modal_stub (
+ {max_users, place, name, instructions}
+) 
+{
+  const modal = { data:{ components:[
+    { component:{
+      values: [ max_users ],
+      custom_id: "max_users", 
+    }},
+    { component:{
+      value: place,
+      custom_id: "place", 
+    }},
+    { component:{
+      value: name,
+      custom_id: "name", 
+    }},
+    { component:{
+      value: instructions,
+      custom_id: "instructions", 
+    }},
+  ]}};
 
-export function seed_cleanings(bot_instance) {
+  modal.createMessage = (_) => {};
+
+  return modal;
+}
+
+function create_cleaning_modal_stub (
+ {template_id, date_start, date_end, repetitions}
+)
+{
+  const modal = { data:{ components:[
+    { component:{
+      values: [ template_id ],
+      custom_id: "template", 
+    }},
+    { component:{
+      value: date_start,
+      custom_id: "start_date", 
+    }},
+    { component:{
+      value: date_end,
+      custom_id: "end_date", 
+    }},
+    { component:{
+      values: [ repetitions ],
+      custom_id: "repetitions", 
+    }},
+  ]}};
+
+  modal.defer = (_) => {};
+  modal.createMessage = (_) => {};
+
+  return modal;
+}
+
+function create_user_join_msg_stub(
+  {member_id, cleaning_id}
+) {
+  let msg = { 
+    member: {id: member_id},
+    data: {options: [{value: cleaning_id}]},
+  }
+
+  msg.createMessage = (_) => {};
+
+  return msg;
+}
+
+export async function seed_cleanings(bot_instance) {
   bot = bot_instance;
 
   // TODO(Sigull): Change these to handlers too.
-  const bar_template_id = db.create_template_logged({
+  let modal1 = create_template_modal_stub({
     max_users: 5,
     place: "Kachna",
     name: "Bar",
     instructions: "uklid to idk"
-  }).lastInsertRowid;
+  });
+  await handler.create_template_modal(modal1);
 
-  const nabytek_template_id = db.create_template_logged({
+  let modal2 = create_template_modal_stub({
     max_users: 3,
     place: "Kachna",
     name: "Kachna",
     instructions: "utri to ig"
-  }).lastInsertRowid;
+  });
+  await handler.create_template_modal(modal2);
 
-  const satna_template_id = db.create_template_logged({
+  let modal3 = create_template_modal_stub({
     max_users: 4,
     place: "Zadní zázemí",
     name: "Šatny dole a nahoře",
     instructions: "Vyluxovat a utřít prach"
-  }).lastInsertRowid;
+  });
+  await handler.create_template_modal(modal3);
 
   // --- PREVIOUS WEEK ---
-  db.create_cleaning_logged({
-    template_id: bar_template_id,
+  let modal4 = create_cleaning_modal_stub({
+    template_id: 1,
     date_start: "2026-02-02", 
     date_end: "2026-02-08",
-    discord_thread_id: null,
+    repetitions: 1,
   });
-  db.create_cleaning_logged({
-    template_id: nabytek_template_id, 
+  await handler.create_cleaning_modal(modal4);
+  let modal5 = create_cleaning_modal_stub({
+    template_id: 2, 
     date_start: "2026-02-02", 
     date_end: "2026-02-08",
-    discord_thread_id: null
+    repetitions: 1,
   });
+  await handler.create_cleaning_modal(modal5);
 
   // --- THIS WEEK ---
-  db.create_cleaning_logged({
-    template_id: bar_template_id,
+  let modal6 = create_cleaning_modal_stub({
+    template_id: 1,
     date_start: "2026-02-9",
     date_end: "2026-02-15",
-    discord_thread_id: null
+    repetitions: 1,
   });
-  db.create_cleaning_logged({
-    template_id: nabytek_template_id,
+  await handler.create_cleaning_modal(modal6);
+  let modal7 = create_cleaning_modal_stub({
+    template_id: 2,
     date_start: "2026-02-9",
     date_end: "2026-02-15",
-    discord_thread_id: null
+    repetitions: 1,
   });
-  db.create_cleaning_logged({
-    template_id: satna_template_id,
+  await handler.create_cleaning_modal(modal7);
+  let modal8 = create_cleaning_modal_stub({
+    template_id: 3,
     date_start: "2026-02-9",
     date_end: "2026-02-15",
-    discord_thread_id: null
+    repetitions: 1,
   });
+  await handler.create_cleaning_modal(modal8);
 
   // --- NEXT WEEK ---
-  let ret1 = db.create_cleaning_logged({
-    template_id: bar_template_id,
+  let modal9 = create_cleaning_modal_stub({
+    template_id: 1,
     date_start: "2026-02-16", 
     date_end: "2026-02-22" ,
-    discord_thread_id: null
+    repetitions: 1,
   });
-  db.create_cleaning_logged({
-    template_id: satna_template_id,
+  await handler.create_cleaning_modal(modal9);
+  let modal10 = create_cleaning_modal_stub({
+    template_id: 3,
     date_start: "2026-02-16",
     date_end: "2026-02-22" ,
-    discord_thread_id: null
+    repetitions: 1,
   });
+  await handler.create_cleaning_modal(modal10);
 
   db.add_update_user_logged({discord_id: "1", name: "jedna", has_role: 0});
   db.add_update_user_logged({discord_id: "2", name: "dva",   has_role: 1});
   db.add_update_user_logged({discord_id: "3", name: "tri",   has_role: 1});
 
-  db.user_join_cleaning_logged({discord_id: "1", cleaning_id: ret1.lastInsertRowid});
+  sleep(5000);
+
+  let msg = create_user_join_msg_stub({member_id: "1", cleaning_id: 2});
+  await handler.join_command(msg);
 
   console.log("Seeding complete.");
 }

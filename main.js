@@ -8,6 +8,8 @@ import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } fr
 import { schedule } from 'node-cron';
 import Eris, { CommandClient } from "eris";
 
+let report_message_id;
+
 const bot = new CommandClient(process.env.BOT_TOKEN, {
     intents: [
         "guilds",
@@ -41,6 +43,28 @@ bot.send_notification = async () => {
   return bot.send(TEST_CH, "ee").catch(err => {
     console.log("Unauthorized to send message: ", err);
   })
+}
+
+bot.send_report = async () => {
+  if (!report_message_id) {
+    bot.getMessages(TEST_CH, { limit: 50 })
+      .then((messages) => {
+        const target = messages.find(m => m.content.includes("**Cleaning Schedule Overview**"));
+        if (target) {
+          bot.deleteMessage(TEST_CH, target.id, "Report refresh.");
+        }
+      });
+  } else {
+    bot.deleteMessage(TEST_CH, report_message_id, "Report refresh.");
+  }
+
+  const report = await generate_cleaning_report_image('2026-01-11', '2026-03-18');
+      
+  const report_message = await bot.createMessage(TEST_CH, {
+    content: "📋 **Cleaning Schedule Overview**",
+  }, report);
+
+  report_message_id = report_message.id;
 }
 
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -92,6 +116,19 @@ function get_cleanings_notify() {
   };
 }
 
+function schedule_generate_report() {
+  let when = '0 * * * *';
+  schedule(when, () => {
+    bot.send_report();
+  
+  }, {
+    scheduled: true,
+    timezone: "Europe/Prague"
+  });
+
+  console.log(`Scheduled report cron for ${when}.`);
+}
+
 function schedule_send_notification_event() {
   // TODO(Sigull): Change for prod
   let when = '47 5 * * *';
@@ -110,6 +147,7 @@ function schedule_send_notification_event() {
 async function startup_bot() {
   bot.guild_fetched = bot.guilds.get(GUILD_ID);
   schedule_send_notification_event();
+  schedule_generate_report();
   await db.sync_users(bot.guild_fetched);
   // TODO(Sigull): temp
   seed_cleanings(bot);

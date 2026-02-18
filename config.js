@@ -1,6 +1,6 @@
 // TODO(Sigull): Maybe move to env so it can be changed at runtime.
 
-export const TEST_CH       = "1470612014543011942";
+export const TEST_CH       = "1473518072403857616";
 export const ADMIN_CHANNEL = "1472266012673179758";
 export const LOG_CH        = "1471158128849588435";
 export const IMP_LOG_CH    = "1471320991341875343";

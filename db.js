@@ -154,8 +154,6 @@ const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
   const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
   const cleaning = get_cleaning_by_id(cleaning_id);
 
-  console.log(cleaning);
-
   if (!user) {
     throw new Error(`User with discord_id ${discord_id} not found.`);
   }
@@ -179,6 +177,7 @@ const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
 };
 
 // -- Log functions to combine with add functions
+// TODO(Sigull): Think about changing this plain text. This way user ids dont interpret.
 function send_log(message) {
   bot.send_log("```" + message + "```");
 }
@@ -306,7 +305,7 @@ export function get_cleanings(start_date, end_date) {
       finished: !!r.finished,
       date_start: r.date_start,
       date_end: r.date_end,
-      discord_thread: r.discord_thread,
+      discord_thread_id: r.discord_thread_id,
       template_rel: r.template_rel,
       template: {
         max_users: r.max_users,
@@ -358,7 +357,7 @@ export function get_cleaning_by_id(cleaning_id) {
       finished: !!row.finished,
       date_start: row.date_start,
       date_end: row.date_end,
-      discord_thread: row.discord_thread,
+      discord_thread_id: row.discord_thread_id,
       template_rel: row.template_rel,
       template: {
         max_users: row.max_users,

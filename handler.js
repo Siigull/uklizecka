@@ -1,6 +1,7 @@
 import * as db from './db.js';
 import { generate_cleaning_report_image } from './helpers.js';
 import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
+import { generate_cleaning_modal, generate_template_modal, generate_template_modal_edit } from './modals.js';
 
 let bot;
 export let public_commands;
@@ -8,16 +9,17 @@ export let manager_commands;
 export let manager_interactions;
 export let button_commands;
 
+class SkipReportError extends Error {
+  constructor(message = "Skip report") {
+    super(message);
+    this.name = "SkipReportError";
+  }
+}
+
 function md_report(func) {
   return async (arg) => {
-    try {
-      await func(arg);
+    if(await func(arg) !== "skip_report") {
       await bot.send_report();
-
-    } catch(err) {
-      if (!err.message.startsWith("Don't send report.")) {
-        throw err;
-      }
     }
   }
 }
@@ -26,17 +28,21 @@ function md_err(func) {
   return async (arg) => {
     try {
       await func(arg);
+      return false;
+
     } catch(err) {
       console.log("Handler error: " + err);
       await arg.createMessage({
         content: err,
         flags: 64,
       });
-      throw new Error(`Don't send report.`);
+
+      return "skip_report";
     }
   }
 }
 
+// This is the important part
 export function handlers_init(bot_instance) {
   bot = bot_instance;
 
@@ -76,7 +82,6 @@ export function handlers_init(bot_instance) {
 
   manager_commands = [
     {
-      // TODO(Sigull): Also should have edit template command
       name: "create-template",
       description: "Create template for cleaning.",
       fullDescription: "Create template for cleaning through discord modal functionality as a form.",
@@ -85,10 +90,22 @@ export function handlers_init(bot_instance) {
     },
     {
       name: "create-cleaning",
-      description: "Create cleaning from template",
+      description: "Create cleaning from template.",
       fullDescription: "Create cleaning through discord modal functionality as a form where template is selected.",
       type: 1,
       handler_function: md_err(create_cleaning_command),
+    },
+    {
+      name: "edit-template",
+      description: "Edit fields of existing template.",
+      type: 1,
+      options: [{
+        name: "target_id",
+        description: "The id of template to edit. Get by list-templates.",
+        type: 4,
+        required: true
+      }],
+      handler_function: md_err(edit_template_command),
     },
     {
       name: "lock-db",
@@ -104,7 +121,7 @@ export function handlers_init(bot_instance) {
     },
     {
       name: "list-templates",
-      description: "List all existing templates",
+      description: "List all existing templates.",
       type: 1,
       handler_function: md_err(list_templates),
     },
@@ -119,6 +136,11 @@ export function handlers_init(bot_instance) {
       name: "create-cleaning-modal",
       handler_function: md_report(md_err(create_cleaning_modal)),
     },
+    {
+      // TODO(Sigull): Should reload thread messages with data from this.
+      name: "edit-template-modal",
+      handler_function: md_report(md_err(edit_template_modal)),
+    }
   ];
 
   button_commands = [
@@ -130,11 +152,11 @@ export function handlers_init(bot_instance) {
 }
 
 export async function lock_command(msg) {
-  db.leave_locked = !db.leave_locked;
+  let locked = db.lock_leave();
 
   let message;
 
-  if (db.leave_locked) {
+  if (locked) {
     message = "Users can't leave ongoing cleanings now.";
   } else {
     message = "Users can leave ongoing cleanings now.";
@@ -195,59 +217,7 @@ export async function leave_command(msg) {
 }
 
 export async function create_template_command(msg) {
-  await msg.createModal({
-    "title": "Cleaning template",
-    "custom_id": "create-template-modal",
-    "components": [
-      {
-        "type": 18,
-        "label": "Maximum number of people cleaning.",
-        "component": {
-          "type": 3,
-          "custom_id": "max_users",
-          "placeholder": "Select a number...",
-          "options": [
-            { "label": "1", "value": "1" },
-            { "label": "2", "value": "2" },
-            { "label": "3", "value": "3" },
-            { "label": "4", "value": "4" },
-            { "label": "5", "value": "5" },
-            { "label": "6", "value": "6" }
-          ]
-        }
-      },
-      {
-        "type": 18,
-        "label": "Place of cleaning.",
-        "component": {
-          "type": 4,
-          "custom_id": "place",
-          "style": 1,
-          "placeholder": "Ideálně něco jako R212 - Kachna"
-        }
-      },
-      {
-        "type": 18,
-        "label": "Name of the template",
-        "component": {
-          "type": 4,
-          "custom_id": "name",
-          "style": 1,
-          "placeholder": "Jméno úklidu"
-        }
-      },
-      {
-        "type": 18,
-        "label": "Cleaning instructions",
-        "component": {
-          "type": 4,
-          "custom_id": "instructions",
-          "style": 2,
-          "placeholder": "Paste Google Docs link here..."
-        }
-      }
-    ]
-  });
+  await msg.createModal(generate_template_modal());
 }
 
 export async function create_template_modal(modal) {
@@ -279,73 +249,7 @@ export async function create_template_modal(modal) {
 }
 
 export async function create_cleaning_command(msg) {
-  let templates = db.get_templates();
-  let template_name_id_pairs = []
-
-  for (const t of templates) {
-    template_name_id_pairs.push({"label": t.name, "value": t.id});
-  }
-
-  await msg.createModal({
-    "title": "Cleaning",
-    "custom_id": "create-cleaning-modal",
-    "components": [
-      {
-        "type": 18,
-        "label": "Cleaning template.",
-        "component": {
-          "type": 3,
-          "custom_id": "template",
-          "placeholder": "Select a template...",
-          "options": template_name_id_pairs,
-        }
-      },
-      {
-        "type": 18,
-        "label": "Start date.",
-        "component": {
-          "type": 4,
-          "custom_id": "start_date",
-          "style": 1,
-          "placeholder": "YYYY-MM-DD",
-        }
-      },
-      {
-        "type": 18,
-        "label": "End date.",
-        "component": {
-          "type": 4,
-          "custom_id": "end_date",
-          "style": 1,
-          "placeholder": "YYYY-MM-DD"
-        }
-      },
-      {
-        "type": 18,
-        "label": "Number of repetitions.",
-        "component": {
-          "type": 3,
-          "custom_id": "repetitions",
-          "placeholder": "Select a number...",
-          "options": [
-            { "label": "1",  "value": 1  },
-            { "label": "2",  "value": 2  },
-            { "label": "3",  "value": 3  },
-            { "label": "4",  "value": 4  },
-            { "label": "5",  "value": 5  },
-            { "label": "6",  "value": 6  },
-            { "label": "7",  "value": 7  },
-            { "label": "8",  "value": 8  },
-            { "label": "9",  "value": 9  },
-            { "label": "10", "value": 10 },
-            { "label": "11", "value": 11 },
-            { "label": "12", "value": 12 },
-            { "label": "13", "value": 13 }
-          ]
-        }
-      }
-    ]
-  });
+  await msg.createModal(generate_cleaning_modal());
 }
 
 function increment_week(date_string) {
@@ -492,4 +396,43 @@ export async function list_templates(msg) {
 
   const message = "Cleaning templates:\n" + lines.join("\n");
   await msg.createMessage({ content: "```" + message + "```", flags: 64 });
+}
+
+export async function edit_template_command(msg) {
+  let template_id = msg.data.options[0].value;
+  let t = db.get_template_by_id(template_id);
+  await msg.createModal(
+    generate_template_modal_edit(template_id, t.max_users, t.place, t.name, t.instructions)
+  );
+}
+
+export async function edit_template_modal(modal) {
+  let res = modal.data.components;
+  let id, max_users, place, name, instructions;
+
+  for (const c of res) {
+    switch(c.component.custom_id) {
+      case "id":
+        id = c.component.values[0];
+        break;
+      case "max_users":
+        max_users = c.component.values[0];
+        break;
+      case "place":
+        place = c.component.value;
+        break;
+      case "name":
+        name = c.component.value;
+        break;
+      case "instructions":
+        instructions = c.component.value;
+        break;
+    }
+  }
+
+  db.update_template_logged(
+    {id: id, max_users: max_users, place: place, name: name, instructions: instructions}
+  );
+
+  await modal.createMessage({ content: "Cleaning template updated.", flags: 64 });
 }

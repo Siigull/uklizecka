@@ -1,4 +1,4 @@
-// TODO(Sigull): Maybe move to env so it can be changed at runtime.
+// TODO(Sigull): Maybe move it to somewhere so it can be changed at runtime through commands.
 
 export const TEST_CH       = "1473518072403857616";
 export const ADMIN_CHANNEL = "1472266012673179758";

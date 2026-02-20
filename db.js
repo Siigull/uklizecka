@@ -7,6 +7,11 @@ import fs from 'fs';
 
 let bot;
 
+export function lock_leave() {
+  db.leave_locked = !db.leave_locked;
+  return db.leave_locked;
+} 
+
 export function run_migrations() {
   const applied = db.prepare('SELECT name FROM migrations').all().map(row => row.name);
 
@@ -37,6 +42,8 @@ export function init(bot_instance) {
   )`).run();
 
   run_migrations();
+
+  db.leave_locked = false;
 }
 
 export async function sync_users(guild) {
@@ -90,7 +97,7 @@ const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}
   return info;
 }
 
-// TODO(Sigull): Have group id to delete them all at the same time.
+
 /**
  * Creates cleaning entries based on a template and a list of date ranges.
  *
@@ -116,6 +123,18 @@ const _create_cleaning_template = ({max_users, place, name, instructions}) => {
   const info = stmt.run(max_users, place, name, instructions);
   return info;
 };
+
+const _update_cleaning_template = ({id, max_users, place, name, instructions}) => {
+  // TODO(Sigull): Handle when theoretically unable. e.g. More current users than max_users.
+  const stmt = db.prepare(`
+    UPDATE template_cleaning
+    SET max_users = ?, place = ?, name = ?, instructions = ?
+    WHERE id = ?
+  `);
+
+  const info = stmt.run(max_users, place, name, instructions, id);
+  return info;
+}
 
 const _start_cleaning = ({cleaning_id}) => {
   const stmt = db.prepare(`
@@ -256,6 +275,13 @@ const _log_template_created = (prev_ret, { name }) => {
   send_log(log_message);
 };
 
+const _log_template_updated = (prev_ret, { id, max_users, place, name, instructions }) => {
+  if (prev_ret.changes > 0) {
+    let log_message = `Edited cleaning with id ${id}`;
+    send_log(log_message);
+  }
+}
+
 const _log_start_cleaning = (prev_ret, { cleaning_id }) => {
   let log_message = `Started cleaning ${cleaning_id}`;
   send_log(log_message);
@@ -309,6 +335,7 @@ const with_logging = (task_fn, log_fn) => {
 export const create_cleaning_logged     = with_logging(_create_cleaning, _log_cleaning_created);
 export const create_cleanings_logged    = with_logging(_create_cleanings, _log_cleanings_created);
 export const create_template_logged     = with_logging(_create_cleaning_template, _log_template_created);
+export const update_template_logged     = with_logging(_update_cleaning_template, _log_template_updated);
 export const start_cleaning_logged      = with_logging(_start_cleaning, _log_start_cleaning);
 export const finish_cleaning_logged     = with_logging(_finish_cleaning, _log_finish_cleaning);
 export const add_update_user_logged     = with_logging(_add_update_user, _log_add_update_user);
@@ -321,7 +348,7 @@ export const user_leave_cleaning_logged = with_logging(_user_leave_cleaning, _lo
  */
 export function get_users() {
   try {
-    const stmt = db.prepare('SELECT id, discord_id, name FROM users');
+    const stmt = db.prepare('SELECT id, discord_id, has_role, name FROM users');
     return stmt.all();
   } catch (err) {
     console.error("get_users error:", err);

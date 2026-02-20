@@ -302,6 +302,8 @@ async function main() {
       }
 
       // -- Return from buttons
+      // NOTE(Sigull): interaction.message.content is not the best way. 
+      // But don't what to change it to.
       let button_command = handler.button_commands.find(c => c.name === interaction.message.content);
       if (button_command && button_command.handler_function) {
         await button_command.handler_function(interaction);
@@ -325,11 +327,11 @@ async function main() {
     let has_cleaning_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
     // -- Nickname change
     if (oldMember.nick != member.nick) {
-      db.add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
+      db.add_update_user_logged({discord_id: member.id, name: member.nick, has_role: has_cleaning_role});
     
     // -- User got 'access to club' role
     } else if (!oldMember.roles.includes(CLEANING_ROLE) && has_cleaning_role) {
-      db.add_update_user_logged({discord_id: member.discord_id, name: member.nick, has_role: has_cleaning_role});
+      db.add_update_user_logged({discord_id: member.id, name: member.nick, has_role: has_cleaning_role});
     }
   });
 
@@ -339,19 +341,23 @@ async function main() {
 main()
 
 // Vibecodenuté věci
-function fatalExit(err, source) {
-  if (fataling) return;
-  fataling = true;
-  console.error(`[fatal:${source}]`, err);
-  setTimeout(() => process.exit(1), 100).unref();
-}
+const fatal_exit = (() => {
+  let exiting = false;
+
+  return (err, source) => {
+    if (exiting) return;
+    exiting = true;
+    console.error(`[fatal:${source}]`, err);
+    setTimeout(() => process.exit(1), 100).unref();
+  };
+})();
 
 process.on("uncaughtException", (err) => {
   (async () => {
     try {
       if (bot) await bot.send_imp_log(`uncaughtException: ${err?.stack || err}`);
     } finally {
-      fatalExit(err, "uncaughtException");
+      fatal_exit(err, "uncaughtException");
     }
   })();
 });

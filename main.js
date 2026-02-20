@@ -188,25 +188,35 @@ function bot_init() {
   }
 
   bot.send_report = async () => {
+    // Find old report message if it is not cached
     if (!report_message_id) {
       let messages = await bot.getMessages(TEST_CH, { limit: 50 })
-      const target = messages.find(m => m.content.includes("**Cleaning Schedule Overview**"));
+      const target = messages.find(m => m.content?.includes("**Harmonogram**"));
       if(target) {
         report_message_id = target.id; 
       }
     }
-    const report = await generate_cleaning_report_image(bot.semester_start, bot.semester_end);
-        
-    const report_message = await bot.createMessage(TEST_CH, {
-      content: "📋 **Cleaning Schedule Overview**",
-    }, report);
 
+    const report = await generate_cleaning_report_image(bot.semester_start, bot.semester_end);
+
+    const report_message = await bot.createMessage(
+      TEST_CH,
+      {
+        content:
+          "- Pro přihlášení k úklidům použij `/join`.\n" +
+          "- Pro odhlášení použij `/leave`.\n" +
+          "- V týdnu tvého úklidu se v příslušném vlákně objeví zpráva s tlačítkem **Dokončen** pro potvrzení úklidu.\n" +
+          "# 📋 **Harmonogram**"
+      },
+      report
+    );
+
+    // delete old report message
     if (report_message_id) {
       bot.deleteMessage(TEST_CH, report_message_id, "Report refresh.");
     }
 
     console.log("Refreshed report.");
-
     report_message_id = report_message.id;
   }
 

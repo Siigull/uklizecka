@@ -172,7 +172,7 @@ export async function report_command(msg) {
     );
     
     await msg.createMessage({
-      content: "📋 **Cleaning Schedule Overview**",
+      content: "📋 **Harmonogram**",
       flags: 64,
     }, report);
         
@@ -249,14 +249,19 @@ export async function create_template_modal(modal) {
 }
 
 export async function create_cleaning_command(msg) {
-  await msg.createModal(generate_cleaning_modal());
+  await msg.createModal(generate_cleaning_modal(db));
 }
 
 function increment_week(date_string) {
-  // format (YYYY-MM-DD)
-  const date = new Date(date_string);
-  date.setDate(date.getDate() + 7);
-  return date.toISOString().split('T')[0];
+  const [year, month, day] = date_string.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  date.setUTCDate(date.getUTCDate() + 7);
+
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export async function create_cleaning_modal(modal) {
@@ -300,6 +305,7 @@ export async function create_cleaning_modal(modal) {
     let thread_channel = await bot.createThread(
       TEST_CH, {invitable: false, name: thread_name, type: 12}
     );
+    // -- Send message with cleaning instructions
     bot.createMessage(thread_channel.id, template.instructions, null);
 
     // -- Create data to be sent later

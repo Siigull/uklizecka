@@ -125,7 +125,7 @@ export function generate_template_modal() {
   };
 }
 
-export function generate_cleaning_modal() {
+export function generate_cleaning_modal(db) {
   let templates = db.get_templates();
   let template_name_id_pairs = []
 

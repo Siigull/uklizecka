@@ -129,8 +129,10 @@ export async function generate_cleaning_report_image(start_str, end_str) {
         // Gradient stops:
         // 0.0: #f04747 (red)
         // 0.5: #f7b32b (orange/yellow)
-        // 1.0: #43b581 (green)
+        // 1.0: (green)
         let r, g, b;
+        // TODO(Sigull): Maybe move color based on how many left
+        //               When 2/3 it is basically green.
         if (ratio < 0.5) {
           // Red to yellow
           // #f04747 (240,71,71) to #f7b32b (247,179,43)
@@ -140,11 +142,11 @@ export async function generate_cleaning_report_image(start_str, end_str) {
           b = Math.round(71 + (43 - 71) * t);
         } else {
           // Yellow to green
-          // #f7b32b (247,179,43) to #43b581 (67,181,129)
+          // #f7b32b (247,179,43) to (50,205,50)
           const t = (ratio - 0.5) / 0.5;
-          r = Math.round(247 + (67 - 247) * t);
-          g = Math.round(179 + (181 - 179) * t);
-          b = Math.round(43 + (129 - 43) * t);
+          r = Math.round(247 + (50 - 247) * t);
+          g = Math.round(179 + (205 - 179) * t);
+          b = Math.round(43 + (50 - 43) * t);
         }
         ctx.fillStyle = `rgb(${r},${g},${b})`;
       }

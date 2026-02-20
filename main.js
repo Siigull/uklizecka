@@ -82,7 +82,7 @@ async function send_cleaning_notifications() {
 
   const previousTasks = cleanings.previous.map(async (element) => {
     if (!element.started) {
-      bot.start_cleaning(element.id);
+      await bot.start_cleaning(element.id);
     }
     return bot.send_warning_unfinished(element.id);
   });
@@ -94,9 +94,14 @@ async function send_cleaning_notifications() {
 
 function schedule_refresh_report() {
   let when = '0 0 * * *';
-  schedule(when, () => {
-    bot.send_report();
-  
+  schedule(when, async () => {
+    try {
+      await bot.send_report();
+    } catch (err) {
+      console.error("send_report cron failed:", err);
+      await bot.send_imp_log(`send_report cron failed: ${err?.stack || err}`);
+    }
+    
   }, {
     scheduled: true,
     timezone: "Europe/Prague"
@@ -106,10 +111,14 @@ function schedule_refresh_report() {
 }
 
 function schedule_send_notification_event() {
-  // TODO(Sigull): Change for prod
   let when = '0 8 * * 1';
-  schedule(when, () => {
-    send_cleaning_notifications();
+  schedule(when, async () => {
+    try {
+      await send_cleaning_notifications();
+    } catch (err) {
+      console.error("notification cron failed:", err);
+      await bot.send_imp_log(`notification cron failed: ${err?.stack || err}`);
+    }
   
   }, {
     scheduled: true,
@@ -201,11 +210,10 @@ function bot_init() {
     report_message_id = report_message.id;
   }
 
-  // TODO(Sigull): When older and finish not available, it should be there.
   bot.start_cleaning = async (cleaning_id) => {
     let cleaning = db.get_cleaning_by_id(cleaning_id);
     db.start_cleaning_logged({cleaning_id});
-    bot.createMessage(cleaning.discord_thread_id,
+    await bot.createMessage(cleaning.discord_thread_id,
       {
         content: "Byl úklid dokončen?",
         components: [
@@ -261,7 +269,7 @@ async function main() {
       // -- Public commands
       let public_command = handler.public_commands.find(c => c.name === interaction.data.name);
       if (public_command && public_command.handler_function) {
-        public_command.handler_function(interaction);
+        await public_command.handler_function(interaction);
         return;
       }
 
@@ -274,7 +282,7 @@ async function main() {
               flags: 64,
             });
         } else {
-          manager_command.handler_function(interaction);
+          await manager_command.handler_function(interaction);
         }
         return;
       }
@@ -288,7 +296,7 @@ async function main() {
               flags: 64,
             });
         } else {
-          manager_interaction.handler_function(interaction);
+          await manager_interaction.handler_function(interaction);
         }
         return;
       }
@@ -296,7 +304,7 @@ async function main() {
       // -- Return from buttons
       let button_command = handler.button_commands.find(c => c.name === interaction.message.content);
       if (button_command && button_command.handler_function) {
-        button_command.handler_function(interaction);
+        await button_command.handler_function(interaction);
         return;
       }
 
@@ -330,12 +338,30 @@ async function main() {
 
 main()
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-  main();
+// Vibecodenuté věci
+function fatalExit(err, source) {
+  if (fataling) return;
+  fataling = true;
+  console.error(`[fatal:${source}]`, err);
+  setTimeout(() => process.exit(1), 100).unref();
+}
+
+process.on("uncaughtException", (err) => {
+  (async () => {
+    try {
+      if (bot) await bot.send_imp_log(`uncaughtException: ${err?.stack || err}`);
+    } finally {
+      fatalExit(err, "uncaughtException");
+    }
+  })();
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection:', reason);
-  main();
+process.on("unhandledRejection", (reason) => {
+  (async () => {
+    try {
+      if (bot) await bot.send_imp_log(`unhandledRejection: ${reason}`);
+    } catch {}
+    console.error("[unhandledRejection]", reason);
+  })();
 });
+

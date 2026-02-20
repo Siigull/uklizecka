@@ -12,7 +12,7 @@ function md_report(func) {
   return async (arg) => {
     try {
       await func(arg);
-      bot.send_report();
+      await bot.send_report();
 
     } catch(err) {
       if (!err.message.startsWith("Don't send report.")) {
@@ -97,17 +97,23 @@ export function handlers_init(bot_instance) {
       handler_function: md_err(lock_command),
     },
     {
-      name: "list-all",
+      name: "list-users",
       description: "List all members and number of cleanings.",
       type: 1,
-      handler_function: md_err(list_all),
+      handler_function: md_err(list_users),
+    },
+    {
+      name: "list-templates",
+      description: "List all existing templates",
+      type: 1,
+      handler_function: md_err(list_templates),
     },
   ];
     
   manager_interactions = [
     {
       name: "create-template-modal",
-      handler_function: md_report(md_err(create_template_modal)),
+      handler_function: md_err(create_template_modal),
     },
     {
       name: "create-cleaning-modal",
@@ -124,7 +130,7 @@ export function handlers_init(bot_instance) {
 }
 
 export async function lock_command(msg) {
-  db.leave_locked != db.leave_locked;
+  db.leave_locked = !db.leave_locked;
 
   let message;
 
@@ -139,7 +145,6 @@ export async function lock_command(msg) {
 
 export async function report_command(msg) {
   try {
-    // TODO(Sigull): temp
     const report = await generate_cleaning_report_image(
       bot.semester_start, bot.semester_end
     );
@@ -158,15 +163,15 @@ export async function report_command(msg) {
   }
 }
 
-function invite_to_cleaning_thread(cleaning_id, member_id) {
+async function invite_to_cleaning_thread(cleaning_id, member_id) {
   let cleaning = db.get_cleaning_by_id(cleaning_id);
-  bot.createMessage(cleaning.discord_thread_id, `<@${member_id}> se připojil.`, null);
+  await bot.createMessage(cleaning.discord_thread_id, `<@${member_id}> se připojil.`, null);
 }
 
 async function kick_from_cleaning_thread(cleaning_id, member_id) {
   let cleaning = db.get_cleaning_by_id(cleaning_id);
   await bot.createMessage(cleaning.discord_thread_id, `<@${member_id}> se odpojil.`, null);
-  bot.leaveThread(cleaning.discord_thread_id, member_id);
+  await bot.leaveThread(cleaning.discord_thread_id, member_id);
 }
 
 export async function join_command(msg) {
@@ -174,7 +179,7 @@ export async function join_command(msg) {
   let cleaning_id = msg.data.options[0].value;
 
   db.user_join_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
-  invite_to_cleaning_thread(cleaning_id, member_id);
+  await invite_to_cleaning_thread(cleaning_id, member_id);
 
   await msg.createMessage({content: "Joined cleaning.", flags: 64 });
 }
@@ -184,7 +189,7 @@ export async function leave_command(msg) {
   let cleaning_id = msg.data.options[0].value;
 
   db.user_leave_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
-  kick_from_cleaning_thread(cleaning_id, member_id);
+  await kick_from_cleaning_thread(cleaning_id, member_id);
 
   await msg.createMessage({ content: "Left cleaning.", flags: 64 });
 }
@@ -245,7 +250,6 @@ export async function create_template_command(msg) {
   });
 }
 
-// TODO(Sigull): Validate data.
 export async function create_template_modal(modal) {
   let res = modal.data.components;
   let max_users, place, name, instructions;
@@ -274,7 +278,6 @@ export async function create_template_modal(modal) {
   await modal.createMessage({ content: "Cleaning template created.", flags: 64 });
 }
 
-// TODO(Sigull): Add a way to show templates in a more whole way.
 export async function create_cleaning_command(msg) {
   let templates = db.get_templates();
   let template_name_id_pairs = []
@@ -360,7 +363,6 @@ export async function create_cleaning_modal(modal) {
   // This gives 15 minutes before command timeout.
   await modal.defer(64);
 
-  // TODO(Sigull): Maybe just use a map and check validity later.
   for (const c of res) {
     switch(c.component.custom_id) {
       case "template":
@@ -390,11 +392,13 @@ export async function create_cleaning_modal(modal) {
      
     let thread_name = `${template.name} ${date_start_str} - ${date_end_str}`;
     // type 12 is private thread
+    // -- Create discord thread for cleaning
     let thread_channel = await bot.createThread(
       TEST_CH, {invitable: false, name: thread_name, type: 12}
     );
     bot.createMessage(thread_channel.id, template.instructions, null);
 
+    // -- Create data to be sent later
     cleaning_list.push({template_id: template_id, date_start: date_start, 
                         date_end: date_end, discord_thread_id: thread_channel.id});
 
@@ -402,6 +406,7 @@ export async function create_cleaning_modal(modal) {
     date_end = increment_week(date_end);
   }
 
+  // -- Put cleanings to db
   db.create_cleanings_logged({cleaning_list});
 
   await modal.createMessage({ content: "Cleaning/s created.", flags: 64});
@@ -428,38 +433,63 @@ export async function finish_cleaning_buttons(buttons) {
   await buttons.createMessage({ content: "Cleaning finished." });
 }
 
-export async function list_all(msg) {
+export async function list_users(msg) {
   const users = db.get_users();
   const cleanings = db.get_cleanings(bot.semester_start, bot.semester_end);
 
-  const userToCleanings = {};
+  const user_to_cleanings = {};
   for (const user of users) {
-    userToCleanings[user.discord_id] = [];
+    user_to_cleanings[user.discord_id] = [];
   }
+
   for (const cleaning of cleanings) {
     for (const participant of cleaning.users) {
-      if (userToCleanings[participant.discord_id]) {
-        userToCleanings[participant.discord_id].push(cleaning.id);
+      if (user_to_cleanings[participant.discord_id]) {
+        user_to_cleanings[participant.discord_id].push(cleaning.id);
       }
     }
   }
 
-  let userCleaningInfo = users.map(user => {
-    const cleaningList = userToCleanings[user.discord_id];
+  let user_cleaning_info = users.map(user => {
+    const cleaningList = user_to_cleanings[user.discord_id];
     return {
       count: cleaningList.length,
       name: user.name,
       discord_id: user.discord_id,
-      cleanings: cleaningList
+      cleanings: cleaningList,
+      has_role: !!user.has_role,
     };
   });
 
-  userCleaningInfo.sort((a, b) => a.count - b.count);
+  user_cleaning_info.sort((a, b) => {return a.count - b.count;});
+  let with_role = user_cleaning_info.filter(user => user.has_role);
+  let without_role = user_cleaning_info.filter(user => !user.has_role);
 
-  let lines = userCleaningInfo.map(info => {
-    return `${info.count} | ${info.name} (${info.discord_id}): ${info.cleanings.length > 0 ? info.cleanings.join(', ') : 'none'}`;
+  const formatLine = (info) =>
+    `${info.count} | ${info.name} (${info.discord_id}): ${info.cleanings.length > 0 ? info.cleanings.join(', ') : 'none'}`;
+
+  const lines = [
+    "All users and their assigned cleanings:",
+    ...with_role.map(formatLine),
+    "---------------- NO CLEANING ROLE ----------------",
+    ...without_role.map(formatLine),
+  ];
+
+  await msg.createMessage({ content: "```" + lines.join("\n") + "```", flags: 64 });
+}
+
+export async function list_templates(msg) {
+  const templates = db.get_templates();
+
+  const lines = templates.map(t => {
+    const instructions = (t.instructions ?? "").replace(/\s+/g, " ").trim();
+    const shortInstructions = instructions.length > 80
+      ? instructions.slice(0, 77) + "..."
+      : instructions;
+
+    return `${t.id} | ${t.name} | ${t.place} | max:${t.max_users} | ${shortInstructions || "no instructions"}`;
   });
-  const message = 'All users and their assigned cleanings:\n' + lines.join('\n');
 
-  await msg.createMessage({ content: '```' + message + '```', flags: 64 });
+  const message = "Cleaning templates:\n" + lines.join("\n");
+  await msg.createMessage({ content: "```" + message + "```", flags: 64 });
 }

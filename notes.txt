@@ -25,4 +25,6 @@ TODO(Sigull): Add help before the report.
 
 TODO(Sigull): Think more about logging. If I want more robust logging in terminal with timestamps etc.
 
+TODO(Sigull): Run with systemd/pm2 restart policy.
+
 node --env-file=.env main.js

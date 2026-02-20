@@ -1,51 +1,42 @@
 import Database from 'better-sqlite3';
 const db = new Database('uklidy.db');
-db.leave_locked = true;
+db.leave_locked = false;
 
 import { CLEANING_ROLE, MANAGER_ROLE } from './config.js';
+import fs from 'fs';
 
 let bot;
+
+export function run_migrations() {
+  const applied = db.prepare('SELECT name FROM migrations').all().map(row => row.name);
+
+  const migrationDirUrl = new URL('./migrations/', import.meta.url);
+  const files = fs
+    .readdirSync(migrationDirUrl, { withFileTypes: true })
+    .filter((d) => d.isFile() && d.name.endsWith('.sql'))
+    .map((d) => d.name)
+    .sort();
+
+  for (const file of files) {
+    if (applied.includes(file)) continue;
+
+    const sql = fs.readFileSync(new URL(file, migrationDirUrl), 'utf8');
+    db.exec(sql);
+    db.prepare('INSERT INTO migrations (name) VALUES (?)').run(file);
+    console.log(`Applied migration: ${file}`);
+  }
+}
 
 export function init(bot_instance) {
   bot = bot_instance;
 
-  db.prepare(`CREATE TABLE IF NOT EXISTS template_cleaning (
+  db.prepare(`CREATE TABLE IF NOT EXISTS migrations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    max_users INTEGER,
-    place TEXT,
-    name TEXT,
-    instructions TEXT
+    name TEXT UNIQUE NOT NULL,
+    applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`).run();
 
-  db.prepare(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    discord_id TEXT UNIQUE NOT NULL,
-    has_role BOOLEAN NOT NULL,
-    name TEXT NOT NULL
-  )`).run();
-
-  db.prepare(`CREATE TABLE IF NOT EXISTS cleaning (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    finished INTEGER DEFAULT 0,
-    started BOOLEAN,
-    date_start DATE,
-    date_end DATE,
-    discord_thread_id TEXT,
-    template_rel INTEGER,
-    FOREIGN KEY(template_rel) REFERENCES template_cleaning(id)
-  )`).run();
-
-  db.prepare(`CREATE TABLE IF NOT EXISTS cleaning_participants (
-    cleaning_id INTEGER,
-    user_id INTEGER,
-    PRIMARY KEY (cleaning_id, user_id),
-    FOREIGN KEY (cleaning_id) REFERENCES cleaning(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-  )`).run();
-
-  // Index for the BETWEEN filter on date_start
-  db.prepare(`CREATE INDEX IF NOT EXISTS idx_cleaning_date ON cleaning(date_start)`).run();
-  db.prepare(`CREATE INDEX IF NOT EXISTS idx_cleaning_template ON cleaning(template_rel)`).run();
+  run_migrations();
 }
 
 export async function sync_users(guild) {
@@ -83,15 +74,9 @@ const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}
   const overlap_stmt = db.prepare(`
     SELECT COUNT(*) AS count FROM cleaning
     WHERE template_rel = ?
-      AND (
-        (date_start <= ? AND date_end >= ?) -- new start is within existing
-        OR
-        (date_start <= ? AND date_end >= ?) -- new end is within existing
-      )
+      AND NOT (date_end < ? OR date_start > ?)
   `);
-  const overlap = overlap_stmt.get(
-    template_id, date_start, date_start, date_end, date_end
-  );
+  const overlap = overlap_stmt.get(template_id, date_start, date_end);
 
   if (overlap.count > 0) {
     throw new Error('Cleaning with this template overlaps with an existing cleaning.');
@@ -245,12 +230,12 @@ const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
 };
 
 // -- Log functions to combine with add functions
-function send_log(message) {
-  bot.send_log(message);
+async function send_log(message) {
+  await bot.send_log(message);
 }
 
-function send_imp_log(message) {
-  bot.send_imp_log(message);
+async function send_imp_log(message) {
+  await bot.send_imp_log(message);
 }
 
 const _log_cleaning_created = (prev_ret, {template_id, date_start, date_end}) => {
@@ -289,7 +274,6 @@ const _log_add_update_user = (prev_ret, { discord_id, name, has_role }) => {
 
   // Just nickname change
   } else if (prev_ret.changes > 0) {
-    // TODO(Sigull): Something is wrong.
     console.log(`${discord_id} changed their nickname`);
   }
 }
@@ -345,8 +329,6 @@ export function get_users() {
   }
 }
 
-// TODO(Sigull): Count to how many cleanings a user is assigned.
-
 // Get functions
 export function get_cleanings(start_date, end_date) {
   try {
@@ -358,7 +340,7 @@ export function get_cleanings(start_date, end_date) {
           '[' || IFNULL(
               GROUP_CONCAT(
                   CASE WHEN u.id IS NOT NULL 
-                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name) 
+                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
                   ELSE NULL END
               ), 
               ''
@@ -410,7 +392,7 @@ export function get_cleaning_by_id(cleaning_id) {
           '[' || IFNULL(
               GROUP_CONCAT(
                   CASE WHEN u.id IS NOT NULL 
-                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name) 
+                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
                   ELSE NULL END
               ), 
               ''

@@ -250,11 +250,12 @@ export async function get_current_semester_dates() {
       return winter_semester;
     }
   }
-  else if (summer_semester && summer_semester.start_date && summer_semester.end_date) {
+  if (summer_semester && summer_semester.start_date && summer_semester.end_date) {
     if (now_date >= summer_semester.start_date && now_date <= summer_semester.end_date) {
       return summer_semester;
     }
-  } else if (summer_semester && summer_semester.end_date) {
+  }
+  if (summer_semester && summer_semester.end_date) {
     let after_summer = summer_semester;
     const endDate = new Date(after_summer.end_date);
     endDate.setFullYear(endDate.getFullYear() + 1);

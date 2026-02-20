@@ -76,8 +76,7 @@ function create_user_join_msg_stub(
 export async function seed_cleanings(bot_instance) {
   try {
     bot = bot_instance;
-
-    // TODO(Sigull): Change these to handlers too.
+    
     let modal1 = create_template_modal_stub({
       max_users: 5,
       place: "Kachna",
@@ -102,7 +101,6 @@ export async function seed_cleanings(bot_instance) {
     });
     await handler.create_template_modal(modal3);
 
-    // --- PREVIOUS WEEK ---
     let modal4 = create_cleaning_modal_stub({
       template_id: 1,
       date_start: "2026-02-23", 
@@ -119,7 +117,6 @@ export async function seed_cleanings(bot_instance) {
     });
     await handler.create_cleaning_modal(modal5);
 
-    // --- THIS WEEK ---
     let modal6 = create_cleaning_modal_stub({
       template_id: 1,
       date_start: "2026-02-09",
@@ -144,7 +141,6 @@ export async function seed_cleanings(bot_instance) {
     });
     await handler.create_cleaning_modal(modal8);
 
-    // --- NEXT WEEK ---
     let modal9 = create_cleaning_modal_stub({
       template_id: 1,
       date_start: "2026-02-16", 

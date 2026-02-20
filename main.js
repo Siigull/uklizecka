@@ -2,104 +2,15 @@
 import * as db from './db.js';
 import { seed_cleanings } from './testing.js';
 import * as handler from './handler.js';
-import { generate_cleaning_report_image } from './timetable_generate.js';
+import { generate_cleaning_report_image, get_current_semester_dates } from './helpers.js';
 
 import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
 import { schedule } from 'node-cron';
 import Eris, { CommandClient } from "eris";
-import * as cheerio from "cheerio";
 
 let report_message_id;
-
-const bot = new CommandClient(process.env.BOT_TOKEN, {
-    intents: [
-        "guilds",
-        "guildMessages",
-        "messageContent",
-        "guildMembers"
-    ]
-}, {  
-    description: "A test bot made with Eris",
-    owner: "somebody",
-    prefix: "!"
-});
-
-bot.send = async (channel, message) => {
-  return bot.createMessage(channel, message, null);
-}
-
-bot.send_log = async (message) => {
-  return bot.send(LOG_CH, message).catch(err => {
-    console.log("Send log message error: ", err);
-  })
-}
-
-bot.send_imp_log = async (message) => {
-  return bot.send(IMP_LOG_CH, message).catch(err => {
-    console.log("Send important log message error: ", err);
-  })
-}
-
-bot.send_report = async () => {
-  if (!report_message_id) {
-    let messages = await bot.getMessages(TEST_CH, { limit: 50 })
-    const target = messages.find(m => m.content.includes("**Cleaning Schedule Overview**"));
-    if(target) {
-      report_message_id = target.id; 
-    }
-  }
-  const report = await generate_cleaning_report_image(bot.semester_start, bot.semester_end);
-      
-  const report_message = await bot.createMessage(TEST_CH, {
-    content: "📋 **Cleaning Schedule Overview**",
-  }, report);
-
-  if (report_message_id) {
-    bot.deleteMessage(TEST_CH, report_message_id, "Report refresh.");
-  }
-
-  console.log("Refreshed report.");
-
-  report_message_id = report_message.id;
-}
-
-// TODO(Sigull): When older and finish not available, it should be there.
-bot.start_cleaning = async (cleaning_id) => {
-  let cleaning = db.get_cleaning_by_id(cleaning_id);
-  db.start_cleaning_logged(cleaning_id);
-  bot.createMessage(cleaning.discord_thread_id,
-    { 
-      content: "Byl úklid dokončen?",
-      components: [
-        {
-          type: 1,
-          custom_id: "confirm_cleaning",
-          components: [
-            {
-              type: 2,
-              label: "Dokončen",
-              style: 3,
-              custom_id: `finished ${cleaning.id}`,
-            },
-          ]
-        }
-      ]
-    }
-  );
-}
-
-bot.send_warning_unfinished = async (cleaning_id) => {
-  let cleaning = db.get_cleaning_by_id(cleaning_id);
-  let members_ping = "";
-  for (const user of cleaning.users) {
-    members_ping += `<@${user.discord_id}>`;
-  }
-  // TODO(Sigull): Reference message with confirm.
-  await bot.createMessage(cleaning.discord_thread_id,
-    "Připomínka: úklid není dokončen/potvrzen \n" + members_ping,
-  );
-}
+let bot;
 
 const formatDate = (date) => date.toISOString().split('T')[0];
 
@@ -208,62 +119,6 @@ function schedule_send_notification_event() {
   console.log(`Scheduled notification cron for ${when}.`);
 }
 
-async function extract_semester_dates(url) {
-  try {
-    const response = await fetch(url);
-    const html_string = await response.text();
-    const $ = cheerio.load(html_string);
-
-    const target_paragraph = $("p:contains('Výuka')").text();
-    
-    if (!target_paragraph) {
-      return;
-    }
-    
-    const regex = /(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/;
-    const match = target_paragraph.match(regex);
-
-    if (match) {
-      const start_date = match[1];
-      const end_date = match[2];
-      return { start_date, end_date };
-    }
-  } catch (error) {
-    console.error("Fetch failed:", error);
-  }
-}
-
-async function get_current_semester_dates() {
-  const now = new Date();
-  const shifted = new Date(now);
-  shifted.setMonth(shifted.getMonth() - 7);
-  const year = shifted.getFullYear();
-
-  const winter_semester = await extract_semester_dates(`https://www.fit.vut.cz/study/schedule/11357/.cs?year=${year}&sem=Z`);
-  const summer_semester = await extract_semester_dates(`https://www.fit.vut.cz/study/schedule/11357/.cs?year=${year}&sem=L`);
-
-  const now_date = now.toISOString().split('T')[0];
-  if (winter_semester && winter_semester.start_date && winter_semester.end_date) {
-    if (now_date >= winter_semester.start_date && now_date <= winter_semester.end_date) {
-      return winter_semester;
-    }
-  }
-  else if (summer_semester && summer_semester.start_date && summer_semester.end_date) {
-    if (now_date >= summer_semester.start_date && now_date <= summer_semester.end_date) {
-      return summer_semester;
-    }
-  } else if (summer_semester && summer_semester.end_date) {
-    let after_summer = summer_semester;
-    const endDate = new Date(after_summer.end_date);
-    endDate.setFullYear(endDate.getFullYear() + 1);
-    after_summer.end_date = endDate.toISOString().split('T')[0];
-    return after_summer;
-  
-  } else {
-    return { start_date: "2000-01-01", end_date: "2100-01-01" };
-  }
-}
-
 async function startup_bot() {
   bot.guild_fetched = bot.guilds.get(GUILD_ID);
   schedule_send_notification_event();
@@ -291,7 +146,99 @@ async function register_commands(commands) {
   }
 }
 
+function bot_init() {
+  bot = new CommandClient(process.env.BOT_TOKEN, {
+      intents: [
+          "guilds",
+          "guildMessages",
+          "messageContent",
+          "guildMembers"
+      ]
+  }, {  
+      description: "A test bot made with Eris",
+      owner: "somebody",
+      prefix: "!"
+  });
+
+  bot.send = async (channel, message) => {
+    return bot.createMessage(channel, message, null);
+  }
+
+  bot.send_log = async (message) => {
+    return bot.send(LOG_CH, message).catch(err => {
+      console.log("Send log message error: ", err);
+    })
+  }
+
+  bot.send_imp_log = async (message) => {
+    return bot.send(IMP_LOG_CH, message).catch(err => {
+      console.log("Send important log message error: ", err);
+    })
+  }
+
+  bot.send_report = async () => {
+    if (!report_message_id) {
+      let messages = await bot.getMessages(TEST_CH, { limit: 50 })
+      const target = messages.find(m => m.content.includes("**Cleaning Schedule Overview**"));
+      if(target) {
+        report_message_id = target.id; 
+      }
+    }
+    const report = await generate_cleaning_report_image(bot.semester_start, bot.semester_end);
+        
+    const report_message = await bot.createMessage(TEST_CH, {
+      content: "📋 **Cleaning Schedule Overview**",
+    }, report);
+
+    if (report_message_id) {
+      bot.deleteMessage(TEST_CH, report_message_id, "Report refresh.");
+    }
+
+    console.log("Refreshed report.");
+
+    report_message_id = report_message.id;
+  }
+
+  // TODO(Sigull): When older and finish not available, it should be there.
+  bot.start_cleaning = async (cleaning_id) => {
+    let cleaning = db.get_cleaning_by_id(cleaning_id);
+    db.start_cleaning_logged(cleaning_id);
+    bot.createMessage(cleaning.discord_thread_id,
+      {
+        content: "Byl úklid dokončen?",
+        components: [
+          {
+            type: 1,
+            custom_id: "confirm_cleaning",
+            components: [
+              {
+                type: 2,
+                label: "Dokončen",
+                style: 3,
+                custom_id: `finished ${cleaning.id}`,
+              },
+            ]
+          }
+        ]
+      }
+    );
+  }
+
+  bot.send_warning_unfinished = async (cleaning_id) => {
+    let cleaning = db.get_cleaning_by_id(cleaning_id);
+    let members_ping = "";
+    for (const user of cleaning.users) {
+      members_ping += `<@${user.discord_id}>`;
+    }
+    // TODO(Sigull): Reference message with confirm.
+    await bot.createMessage(cleaning.discord_thread_id,
+      "Připomínka: úklid není dokončen/potvrzen \n" + members_ping,
+    );
+  }
+}
+
 async function main() {
+  bot_init();
   db.init(bot);
 
   handler.handlers_init(bot); 
@@ -380,3 +327,13 @@ async function main() {
 }
 
 main()
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  main();
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+  main();
+});

@@ -17,4 +17,7 @@ TODO(Sigull): Maybe when cleaning starts users cant leave.
 
 TODO(Sigull): Have commands for manager to handle leave when started etc.
 
+TODO(Sigull): Maybe add responsive errors right in the commands. Like what
+              writes when the integer argument is not an integer.
+
 node --env-file=.env main.js

@@ -53,25 +53,30 @@ export async function sync_users(guild) {
   const members = await guild.members;
   const eligible_members = members.filter(m => !m.user.bot);
 
+  let updated_user_count = 0;
+
   const sync_transaction = db.transaction((member_list) => {
     for (const member of member_list) {
       let id = member.id;
       let nick = member.nick ? member.nick : member.user.username;
       let has_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
-      
+
       // Could be optimized. This prepares every statement.
-      add_update_user_logged({
+      let info = add_update_user_logged({
         discord_id: id,
         name: nick,
         has_role: has_role
       });
+
+      if (info.changes) {
+        updated_user_count++;
+      }
     }
   });
 
   sync_transaction(eligible_members);
-  console.log(`Synced ${eligible_members.length} users.`);
+  console.log(`Synced ${updated_user_count} users.`);
 }
-
 
 // -- Add functions
 // TODO(Sigull): Cleanings with same template shouldnt overlap.
@@ -145,13 +150,16 @@ const _finish_cleaning = ({member_id, cleaning_id}) => {
 
 const _add_update_user = ({discord_id, name, has_role}) => {
   const stmt = db.prepare(`
-    INSERT INTO users (discord_id, name, has_role)
+    INSERT INTO users (discord_id, has_role, name)
     VALUES (?, ?, ?)
     ON CONFLICT(discord_id) DO UPDATE SET
-      name = EXCLUDED.name
+      name = EXCLUDED.name,
+      has_role = EXCLUDED.has_role
+    WHERE name IS NOT EXCLUDED.name 
+      OR has_role IS NOT EXCLUDED.has_role;
   `);
 
-  const info = stmt.run(discord_id, name, has_role);
+  const info = stmt.run(discord_id, has_role ? 1 : 0, name);
   return info;
 }
 

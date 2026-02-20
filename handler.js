@@ -1,5 +1,5 @@
 import * as db from './db.js';
-import { generate_cleaning_report_image } from './timetable_generate.js';
+import { generate_cleaning_report_image } from './helpers.js';
 import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
 let bot;

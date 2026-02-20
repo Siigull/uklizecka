@@ -1,4 +1,5 @@
 import * as db from './db.js';
+import * as cheerio from "cheerio";
 
 import { createCanvas } from 'canvas';
 
@@ -207,4 +208,60 @@ export async function generate_cleaning_report_image(start_str, end_str) {
     file: canvas.toBuffer('image/png'),
     name: 'cleaning_weekly_names.png'
   };
+}
+
+async function extract_semester_dates(url) {
+  try {
+    const response = await fetch(url);
+    const html_string = await response.text();
+    const $ = cheerio.load(html_string);
+
+    const target_paragraph = $("p:contains('Výuka')").text();
+    
+    if (!target_paragraph) {
+      return;
+    }
+    
+    const regex = /(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/;
+    const match = target_paragraph.match(regex);
+
+    if (match) {
+      const start_date = match[1];
+      const end_date = match[2];
+      return { start_date, end_date };
+    }
+  } catch (error) {
+    console.error("Fetch failed:", error);
+  }
+}
+
+export async function get_current_semester_dates() {
+  const now = new Date();
+  const shifted = new Date(now);
+  shifted.setMonth(shifted.getMonth() - 7);
+  const year = shifted.getFullYear();
+
+  const winter_semester = await extract_semester_dates(`https://www.fit.vut.cz/study/schedule/11357/.cs?year=${year}&sem=Z`);
+  const summer_semester = await extract_semester_dates(`https://www.fit.vut.cz/study/schedule/11357/.cs?year=${year}&sem=L`);
+
+  const now_date = now.toISOString().split('T')[0];
+  if (winter_semester && winter_semester.start_date && winter_semester.end_date) {
+    if (now_date >= winter_semester.start_date && now_date <= winter_semester.end_date) {
+      return winter_semester;
+    }
+  }
+  else if (summer_semester && summer_semester.start_date && summer_semester.end_date) {
+    if (now_date >= summer_semester.start_date && now_date <= summer_semester.end_date) {
+      return summer_semester;
+    }
+  } else if (summer_semester && summer_semester.end_date) {
+    let after_summer = summer_semester;
+    const endDate = new Date(after_summer.end_date);
+    endDate.setFullYear(endDate.getFullYear() + 1);
+    after_summer.end_date = endDate.toISOString().split('T')[0];
+    return after_summer;
+  
+  } else {
+    return { start_date: "2000-01-01", end_date: "2100-01-01" };
+  }
 }

@@ -10,8 +10,15 @@ export let button_commands;
 
 function md_report(func) {
   return async (arg) => {
-    await func(arg);
-    bot.send_report();
+    try {
+      await func(arg);
+      bot.send_report();
+
+    } catch(err) {
+      if (!err.message.startsWith("Don't send report.")) {
+        throw err;
+      }
+    }
   }
 }
 
@@ -25,88 +32,117 @@ function md_err(func) {
         content: err,
         flags: 64,
       });
+      throw new Error(`Don't send report.`);
     }
   }
 }
 
 export function handlers_init(bot_instance) {
-    bot = bot_instance;
+  bot = bot_instance;
 
-    public_commands = [
-        {
-            name: "report",
-            description: "Sends table of cleanings.",
-            fullDescription: "Sends table of cleanings from this semester. The table is sent as a generated image.",
-            type: 1,
-            handler_function: md_err(report_command),
-        },
-        {
-            name: "join",
-            description: "Join one cleaning of specified id.",
-            type: 1,
-            options: [{
-            name: "target_id",
-            description: "The id of cleaning to join.",
-            type: 4,
-            required: true
-            }],
-            handler_function: md_report(md_err(join_command)),
-        },
-        {
-            name: "leave",
-            description: "Leave one cleaning of specified id.",
-            type: 1,
-            options: [{
-            name: "target_id",
-            description: "The id of cleaning to leave.",
-            type: 4,
-            required: true
-            }],
-            handler_function: md_report(md_err(leave_command)),
-        },
-    ];
+  public_commands = [
+    {
+      name: "report",
+      description: "Sends table of cleanings.",
+      fullDescription: "Sends table of cleanings from this semester. The table is sent as a generated image.",
+      type: 1,
+      handler_function: md_err(report_command),
+    },
+    {
+      name: "join",
+      description: "Join one cleaning of specified id.",
+      type: 1,
+      options: [{
+        name: "target_id",
+        description: "The id of cleaning to join.",
+        type: 4,
+        required: true
+      }],
+      handler_function: md_report(md_err(join_command)),
+    },
+    {
+      name: "leave",
+      description: "Leave one cleaning of specified id.",
+      type: 1,
+      options: [{
+        name: "target_id",
+        description: "The id of cleaning to leave.",
+        type: 4,
+        required: true
+      }],
+      handler_function: md_report(md_err(leave_command)),
+    },
+  ];
 
-    manager_commands = [
-        {
-            // TODO(Sigull): Also should have edit template command
-            name: "create-template",
-            description: "Create template for cleaning.",
-            fullDescription: "Create template for cleaning through discord modal functionality as a form.",
-            type: 1,
-            handler_function: md_err(create_template_command),
-        },
-        {
-            name: "create-cleaning",
-            description: "Create cleaning from template",
-            fullDescription: "Create cleaning through discord modal functionality as a form where template is selected.",
-            type: 1,
-            handler_function: md_err(create_cleaning_command),
-        },
-      ];
-      
-    manager_interactions = [
-      {
-        name: "create-template-modal",
-        handler_function: md_report(md_err(create_template_modal)),
-      },
-      {
-        name: "create-cleaning-modal",
-        handler_function: md_report(md_err(create_cleaning_modal)),
-      },
-    ];
+  manager_commands = [
+    {
+      // TODO(Sigull): Also should have edit template command
+      name: "create-template",
+      description: "Create template for cleaning.",
+      fullDescription: "Create template for cleaning through discord modal functionality as a form.",
+      type: 1,
+      handler_function: md_err(create_template_command),
+    },
+    {
+      name: "create-cleaning",
+      description: "Create cleaning from template",
+      fullDescription: "Create cleaning through discord modal functionality as a form where template is selected.",
+      type: 1,
+      handler_function: md_err(create_cleaning_command),
+    },
+    {
+      name: "lock-db",
+      description: "Un/lock leaving cleanings, which are for the current week.",
+      type: 1,
+      handler_function: md_err(lock_command),
+    },
+    {
+      name: "list-all",
+      description: "List all members and number of cleanings.",
+      type: 1,
+      handler_function: md_err(list_all),
+    },
+  ];
+    
+  manager_interactions = [
+    {
+      name: "create-template-modal",
+      handler_function: md_report(md_err(create_template_modal)),
+    },
+    {
+      name: "create-cleaning-modal",
+      handler_function: md_report(md_err(create_cleaning_modal)),
+    },
+  ];
 
-    button_commands = [
-      {
-        name: "Byl úklid dokončen?",
-        handler_function: md_report(md_err(finish_cleaning_buttons)),
-      }
-    ];
+  button_commands = [
+    {
+      name: "Byl úklid dokončen?",
+      handler_function: md_report(md_err(finish_cleaning_buttons)),
+    }
+  ];
+}
+
+export async function lock_command(msg) {
+  db.leave_locked != db.leave_locked;
+
+  let message;
+
+  if (db.leave_locked) {
+    message = "Users can't leave ongoing cleanings now.";
+  } else {
+    message = "Users can leave ongoing cleanings now.";
+  }
+
+  await msg.createMessage({content: message, flags: 64});
 }
 
 export async function report_command(msg) {
   try {
     // TODO(Sigull): temp
-    const report = await generate_cleaning_report_image('2026-01-11', '2026-03-18');
+    const report = await generate_cleaning_report_image(
+      bot.semester_start, bot.semester_end
+    );
     
     await msg.createMessage({
       content: "📋 **Cleaning Schedule Overview**",
@@ -137,13 +173,8 @@ export async function join_command(msg) {
   let member_id = msg.member.id;
   let cleaning_id = msg.data.options[0].value;
 
-  try {
-    db.user_join_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
-    invite_to_cleaning_thread(cleaning_id, member_id);
-
-  } catch (err) {
-    console.log(err);
-  }
+  db.user_join_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+  invite_to_cleaning_thread(cleaning_id, member_id);
 
   await msg.createMessage({content: "Joined cleaning.", flags: 64 });
 }
@@ -152,13 +183,8 @@ export async function leave_command(msg) {
   let member_id = msg.member.id;
   let cleaning_id = msg.data.options[0].value;
 
-  try {
-    db.user_leave_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
-    kick_from_cleaning_thread(cleaning_id, member_id);
-
-  } catch (err) {
-    console.log(err);
-  }
+  db.user_leave_cleaning_logged({discord_id: member_id, cleaning_id: cleaning_id});
+  kick_from_cleaning_thread(cleaning_id, member_id);
 
   await msg.createMessage({ content: "Left cleaning.", flags: 64 });
 }
@@ -166,7 +192,7 @@ export async function leave_command(msg) {
 export async function create_template_command(msg) {
   await msg.createModal({
     "title": "Cleaning template",
-    "custom_id": "create_template",
+    "custom_id": "create-template-modal",
     "components": [
       {
         "type": 18,
@@ -257,7 +283,7 @@ export async function create_cleaning_command(msg) {
 
   await msg.createModal({
     "title": "Cleaning",
-    "custom_id": "create_cleaning",
+    "custom_id": "create-cleaning-modal",
     "components": [
       {
         "type": 18,
@@ -398,4 +424,40 @@ export async function finish_cleaning_buttons(buttons) {
   db.finish_cleaning_logged({member_id, cleaning_id});
 
   await buttons.createMessage({ content: "Cleaning finished." });
+}
+
+export async function list_all(msg) {
+  const users = db.get_users();
+  const cleanings = db.get_cleanings(bot.semester_start, bot.semester_end);
+
+  const userToCleanings = {};
+  for (const user of users) {
+    userToCleanings[user.discord_id] = [];
+  }
+  for (const cleaning of cleanings) {
+    for (const participant of cleaning.users) {
+      if (userToCleanings[participant.discord_id]) {
+        userToCleanings[participant.discord_id].push(cleaning.id);
+      }
+    }
+  }
+
+  let userCleaningInfo = users.map(user => {
+    const cleaningList = userToCleanings[user.discord_id];
+    return {
+      count: cleaningList.length,
+      name: user.name,
+      discord_id: user.discord_id,
+      cleanings: cleaningList
+    };
+  });
+
+  userCleaningInfo.sort((a, b) => a.count - b.count);
+
+  let lines = userCleaningInfo.map(info => {
+    return `${info.count} | ${info.name} (${info.discord_id}): ${info.cleanings.length > 0 ? info.cleanings.join(', ') : 'none'}`;
+  });
+  const message = 'All users and their assigned cleanings:\n' + lines.join('\n');
+
+  await msg.createMessage({ content: '```' + message + '```', flags: 64 });
 }

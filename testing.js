@@ -104,15 +104,16 @@ export async function seed_cleanings(bot_instance) {
   // --- PREVIOUS WEEK ---
   let modal4 = create_cleaning_modal_stub({
     template_id: 1,
-    date_start: "2026-02-02", 
-    date_end: "2026-02-08",
+    date_start: "2026-02-23", 
+    date_end: "2026-03-01",
     repetitions: 1,
   });
   await handler.create_cleaning_modal(modal4);
+
   let modal5 = create_cleaning_modal_stub({
     template_id: 2, 
-    date_start: "2026-02-02", 
-    date_end: "2026-02-08",
+    date_start: "2026-02-23", 
+    date_end: "2026-03-01",
     repetitions: 1,
   });
   await handler.create_cleaning_modal(modal5);
@@ -125,6 +126,7 @@ export async function seed_cleanings(bot_instance) {
     repetitions: 1,
   });
   await handler.create_cleaning_modal(modal6);
+
   let modal7 = create_cleaning_modal_stub({
     template_id: 2,
     date_start: "2026-02-09",
@@ -132,6 +134,7 @@ export async function seed_cleanings(bot_instance) {
     repetitions: 1,
   });
   await handler.create_cleaning_modal(modal7);
+
   let modal8 = create_cleaning_modal_stub({
     template_id: 3,
     date_start: "2026-02-09",
@@ -148,6 +151,7 @@ export async function seed_cleanings(bot_instance) {
     repetitions: 1,
   });
   await handler.create_cleaning_modal(modal9);
+
   let modal10 = create_cleaning_modal_stub({
     template_id: 3,
     date_start: "2026-02-16",
@@ -165,17 +169,17 @@ export async function seed_cleanings(bot_instance) {
 
   sleep(5000);
 
-  let msg1 = create_user_join_msg_stub({member_id: "1", cleaning_id: 3});
+  let msg1 = create_user_join_msg_stub({member_id: "1", cleaning_id: 1});
   await handler.join_command(msg1);
-  let msg2 = create_user_join_msg_stub({member_id: "2", cleaning_id: 3});
+  let msg2 = create_user_join_msg_stub({member_id: "2", cleaning_id: 1});
   await handler.join_command(msg2);
-  let msg3 = create_user_join_msg_stub({member_id: "3", cleaning_id: 3});
+  let msg3 = create_user_join_msg_stub({member_id: "3", cleaning_id: 1});
   await handler.join_command(msg3);
-  let msg4 = create_user_join_msg_stub({member_id: "4", cleaning_id: 3});
+  let msg4 = create_user_join_msg_stub({member_id: "4", cleaning_id: 1});
   await handler.join_command(msg4);
-  let msg5 = create_user_join_msg_stub({member_id: "5", cleaning_id: 4});
+  let msg5 = create_user_join_msg_stub({member_id: "5", cleaning_id: 7});
   await handler.join_command(msg5);
-  let msg6 = create_user_join_msg_stub({member_id: "6", cleaning_id: 4});
+  let msg6 = create_user_join_msg_stub({member_id: "6", cleaning_id: 7});
   await handler.join_command(msg6);
 
   console.log("Seeding complete.");

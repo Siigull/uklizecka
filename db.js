@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
 const db = new Database('uklidy.db');
+db.leave_locked = true;
 
-import { CLEANING_ROLE } from './config.js';
+import { CLEANING_ROLE, MANAGER_ROLE } from './config.js';
 
 let bot;
 
@@ -26,6 +27,7 @@ export function init(bot_instance) {
   db.prepare(`CREATE TABLE IF NOT EXISTS cleaning (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     finished INTEGER DEFAULT 0,
+    started BOOLEAN,
     date_start DATE,
     date_end DATE,
     discord_thread_id TEXT,
@@ -67,7 +69,7 @@ export async function sync_users(guild) {
   });
 
   sync_transaction(eligible_members);
-  console.log(`Synced ${eligible_members.size} users.`);
+  console.log(`Synced ${eligible_members.length} users.`);
 }
 
 
@@ -76,9 +78,9 @@ export async function sync_users(guild) {
 const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}) => {
   const stmt = db.prepare(`
     INSERT INTO cleaning 
-    (finished, date_start, date_end, discord_thread_id, template_rel) VALUES (?, ?, ?, ?, ?)
+    (finished, started, date_start, date_end, discord_thread_id, template_rel) VALUES (?, ?, ?, ?, ?, ?)
   `);
-  const info = stmt.run(0, date_start, date_end, discord_thread_id, template_id);
+  const info = stmt.run(0, 0, date_start, date_end, discord_thread_id, template_id);
   return info;
 }
 
@@ -108,6 +110,17 @@ const _create_cleaning_template = ({max_users, place, name, instructions}) => {
   const info = stmt.run(max_users, place, name, instructions);
   return info;
 };
+
+const _start_cleaning = ({cleaning_id}) => {
+  const stmt = db.prepare(`
+    UPDATE cleaning
+    SET started = 1
+    WHERE id = ?
+  `);
+
+  const info = stmt.run(cleaning_id);
+  return info;
+}
 
 const _finish_cleaning = ({member_id, cleaning_id}) => {
   // Check if member is a participant in the cleaning
@@ -144,10 +157,10 @@ const _add_update_user = ({discord_id, name, has_role}) => {
 
 // TODO(Sigull): Add more function for someone with priviliges to for example finish unfinished 
 //               Print stuff about who cleaned etc.
-
 const _user_join_cleaning = ({discord_id, cleaning_id}) => {
   const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
   const cleaning = get_cleaning_by_id(cleaning_id);
+  const now = new Date();
 
   if (!user) {
     throw new Error(`User with discord_id: ${discord_id} not found.`);
@@ -158,8 +171,17 @@ const _user_join_cleaning = ({discord_id, cleaning_id}) => {
   if (cleaning.finished) {
     throw new Error(`Can't join finished cleaning with id: ${cleaning_id}`);
   }
+  if (cleaning.users.find(u => u.discord_id === discord_id)) {
+    throw new Error(`Can't join cleaning you are already a part of.`);
+  }
   if (cleaning.users.length >= cleaning.template.max_users) {
-    throw new Error(`Can't join full cleaning with id: ${cleaning_id}.`)
+    throw new Error(`Can't join full cleaning with id: ${cleaning_id}.`);
+  }
+  if (cleaning.date_end < now.toISOString().split('T')[0]) {
+    throw new Error(`Can't join cleaning which ended in the past.`);
+  }
+  if (cleaning.started) {
+    bot.send_imp_log(`User ${user.name} joined a cleaning ${cleaning.id} which has already started.`);
   }
 
   const stmt = db.prepare(`
@@ -185,7 +207,10 @@ const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
     throw new Error(`You cannot leave a cleaning you are not a part of.`)
   }
   if (cleaning.finished) {
-    throw new Error(`Why would you want to leave a finished cleaning you cunt.`);
+    throw new Error(`Why would you want to leave a finished cleaning.`);
+  }
+  if (cleaning.started && db.leave_locked) {
+    throw new Error(`You can't leave a cleaning that has already started. Write to <@${MANAGER_ROLE}>.`);
   }
 
   const stmt = db.prepare(`
@@ -224,6 +249,11 @@ const _log_template_created = (prev_ret, { name }) => {
   let log_message = `Created template ${name}`; 
   send_log(log_message);
 };
+
+const _log_start_cleaning = (prev_ret, { cleaning_id }) => {
+  let log_message = `Started cleaning ${cleaning_id}`;
+  send_log(log_message);
+}
 
 const _log_finish_cleaning = (prev_ret, { cleaning_id }) => {
   let log_message = `Finished cleaning with id ${cleaning_id}`;
@@ -274,6 +304,7 @@ const with_logging = (task_fn, log_fn) => {
 export const create_cleaning_logged     = with_logging(_create_cleaning, _log_cleaning_created);
 export const create_cleanings_logged    = with_logging(_create_cleanings, _log_cleanings_created);
 export const create_template_logged     = with_logging(_create_cleaning_template, _log_template_created);
+export const start_cleaning_logged      = with_logging(_start_cleaning, _log_start_cleaning);
 export const finish_cleaning_logged     = with_logging(_finish_cleaning, _log_finish_cleaning);
 export const add_update_user_logged     = with_logging(_add_update_user, _log_add_update_user);
 export const user_join_cleaning_logged  = with_logging(_user_join_cleaning, _log_user_join_cleaning);
@@ -302,7 +333,7 @@ export function get_cleanings(start_date, end_date) {
 
     let sql = `
       SELECT 
-          c.id, c.finished, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
+          c.id, c.finished, c.started, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
           t.max_users, t.place, t.name, t.instructions,
           -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
           '[' || IFNULL(
@@ -328,6 +359,7 @@ export function get_cleanings(start_date, end_date) {
       id: r.id,
       users: JSON.parse(r.participants || '[]'),
       finished: !!r.finished,
+      started: !!r.started,
       date_start: r.date_start,
       date_end: r.date_end,
       discord_thread_id: r.discord_thread_id,
@@ -354,7 +386,7 @@ export function get_cleaning_by_id(cleaning_id) {
   try {
     const sql = `
       SELECT 
-          c.id, c.finished, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
+          c.id, c.finished, c.started, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
           t.max_users, t.place, t.name, t.instructions,
           '[' || IFNULL(
               GROUP_CONCAT(
@@ -380,6 +412,7 @@ export function get_cleaning_by_id(cleaning_id) {
       id: row.id,
       users: JSON.parse(row.participants || '[]'),
       finished: !!row.finished,
+      started: !!row.started,
       date_start: row.date_start,
       date_end: row.date_end,
       discord_thread_id: row.discord_thread_id,

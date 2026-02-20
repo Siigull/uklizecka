@@ -165,12 +165,14 @@ function bot_init() {
   }
 
   bot.send_log = async (message) => {
+    message = `[${new Date().toISOString()}]: ${message}`;
     return bot.send(LOG_CH, message).catch(err => {
       console.log("Send log message error: ", err);
     })
   }
 
   bot.send_imp_log = async (message) => {
+    message = `[${new Date().toISOString()}]: ${message}`;
     return bot.send(IMP_LOG_CH, message).catch(err => {
       console.log("Send important log message error: ", err);
     })
@@ -202,7 +204,7 @@ function bot_init() {
   // TODO(Sigull): When older and finish not available, it should be there.
   bot.start_cleaning = async (cleaning_id) => {
     let cleaning = db.get_cleaning_by_id(cleaning_id);
-    db.start_cleaning_logged(cleaning_id);
+    db.start_cleaning_logged({cleaning_id});
     bot.createMessage(cleaning.discord_thread_id,
       {
         content: "Byl úklid dokončen?",

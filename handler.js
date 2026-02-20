@@ -267,7 +267,9 @@ export async function create_template_modal(modal) {
     }
   }
 
-  db.create_template_logged({max_users, place, name, instructions});
+  db.create_template_logged({
+    max_users: max_users, place: place, name: name, instructions: instructions}
+  );
 
   await modal.createMessage({ content: "Cleaning template created.", flags: 64 });
 }

@@ -79,8 +79,24 @@ export async function sync_users(guild) {
 }
 
 // -- Add functions
-// TODO(Sigull): Cleanings with same template shouldnt overlap.
 const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}) => {
+  const overlap_stmt = db.prepare(`
+    SELECT COUNT(*) AS count FROM cleaning
+    WHERE template_rel = ?
+      AND (
+        (date_start <= ? AND date_end >= ?) -- new start is within existing
+        OR
+        (date_start <= ? AND date_end >= ?) -- new end is within existing
+      )
+  `);
+  const overlap = overlap_stmt.get(
+    template_id, date_start, date_start, date_end, date_end
+  );
+
+  if (overlap.count > 0) {
+    throw new Error('Cleaning with this template overlaps with an existing cleaning.');
+  }
+
   const stmt = db.prepare(`
     INSERT INTO cleaning 
     (finished, started, date_start, date_end, discord_thread_id, template_rel) VALUES (?, ?, ?, ?, ?, ?)
@@ -163,8 +179,6 @@ const _add_update_user = ({discord_id, name, has_role}) => {
   return info;
 }
 
-// TODO(Sigull): Add more function for someone with priviliges to for example finish unfinished 
-//               Print stuff about who cleaned etc.
 const _user_join_cleaning = ({discord_id, cleaning_id}) => {
   const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
   const cleaning = get_cleaning_by_id(cleaning_id);
@@ -231,13 +245,12 @@ const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
 };
 
 // -- Log functions to combine with add functions
-// TODO(Sigull): Think about changing this plain text. This way user ids dont interpret.
 function send_log(message) {
-  bot.send_log("```" + message + "```");
+  bot.send_log(message);
 }
 
 function send_imp_log(message) {
-  bot.send_imp_log("```" + message + "```");
+  bot.send_imp_log(message);
 }
 
 const _log_cleaning_created = (prev_ret, {template_id, date_start, date_end}) => {
@@ -337,8 +350,6 @@ export function get_users() {
 // Get functions
 export function get_cleanings(start_date, end_date) {
   try {
-    console.log(`Fetching dates from ${start_date} to ${end_date}`);
-
     let sql = `
       SELECT 
           c.id, c.finished, c.started, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 

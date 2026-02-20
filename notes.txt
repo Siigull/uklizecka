@@ -20,4 +20,9 @@ TODO(Sigull): Have commands for manager to handle leave when started etc.
 TODO(Sigull): Maybe add responsive errors right in the commands. Like what
               writes when the integer argument is not an integer.
 
+TODO(Sigull): What other thing would a manager want.
+TODO(Sigull): Add help before the report.
+
+TODO(Sigull): Think more about logging. If I want more robust logging in terminal with timestamps etc.
+
 node --env-file=.env main.js

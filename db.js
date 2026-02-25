@@ -115,6 +115,19 @@ const _create_cleanings = ({cleaning_list}) => {
   sync_transaction(cleaning_list);
 }
 
+function _remove_cleaning({cleaning_id}) {
+  if (cleaning_id === undefined || cleaning_id === null) {
+    throw new Error('cleaning_id is required.');
+  }
+
+  const tx = db.transaction((id) => {
+    db.prepare('DELETE FROM cleaning_participants WHERE cleaning_id = ?').run(id);
+    return db.prepare('DELETE FROM cleaning WHERE id = ?').run(id);
+  });
+
+  return tx(cleaning_id);
+}
+
 const _create_cleaning_template = ({max_users, place, name, instructions}) => {
   const stmt = db.prepare(`
     INSERT INTO template_cleaning 
@@ -270,6 +283,12 @@ const _log_cleanings_created = (prev_ret, {cleanings}) => {
   send_log(log_message);
 }
 
+const _log_remove_cleaning = (prev_ret, {cleaning_id}) => {
+  let log_message = `Cleaning removed.`;
+
+  send_log(log_message);
+}
+
 const _log_template_created = (prev_ret, { name }) => {
   let log_message = `Created template ${name}`; 
   send_log(log_message);
@@ -335,6 +354,7 @@ const with_logging = (task_fn, log_fn) => {
 export const create_cleaning_logged     = with_logging(_create_cleaning, _log_cleaning_created);
 export const create_cleanings_logged    = with_logging(_create_cleanings, _log_cleanings_created);
 export const create_template_logged     = with_logging(_create_cleaning_template, _log_template_created);
+export const remove_cleaning_logged     = with_logging(_remove_cleaning, _log_remove_cleaning);
 export const update_template_logged     = with_logging(_update_cleaning_template, _log_template_updated);
 export const start_cleaning_logged      = with_logging(_start_cleaning, _log_start_cleaning);
 export const finish_cleaning_logged     = with_logging(_finish_cleaning, _log_finish_cleaning);

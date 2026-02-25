@@ -266,6 +266,18 @@ function bot_init() {
 
     await bot.send_log(`Thread ${thread_id} archived and locked.`);
   }
+
+  bot.remove_thread = async (thread_id) => {
+    let thread = bot.getChannel;
+
+    if (!thread) {
+      throw new Error(`Thread to archive with id not defined`);
+    }
+
+    await thread.delete();
+
+    await bot.send_log(`Thread ${thread_id} deleted.`);
+  }
 }
 
 async function leave_unauthorized_guilds() {
@@ -371,7 +383,7 @@ async function main() {
         console.log(`Joined unauthorized guild ${guild.name}. Leaving...`);
         guild.leave();
     }
-});
+  });
 
   bot.connect();
 }

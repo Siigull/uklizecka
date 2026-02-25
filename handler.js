@@ -125,6 +125,12 @@ export function handlers_init(bot_instance) {
       type: 1,
       handler_function: md_err(list_templates),
     },
+    {
+      name: "remove-cleaning",
+      description: "Remove cleaning with id",
+      type: 1,
+      handler_function: md_err(remove_cleaning),
+    }
   ];
     
   manager_interactions = [
@@ -443,4 +449,18 @@ export async function edit_template_modal(modal) {
   );
 
   await modal.createMessage({ content: "Cleaning template updated.", flags: 64 });
+}
+
+export async function remove_cleaning(msg) {
+  let cleaning_id = msg.data.options[0].value;
+  let cleaning = db.get_cleaning_by_id(cleaning_id);
+
+  db.remove_cleaning({cleaning_id: cleaning_id});
+  await bot.remove_thread(cleaning.discord_thread_id);
+
+  await msg.createMessage({content: `Cleaning ${cleaning_id} removed`, flags: 64});
+}
+
+export async function kick_user_cleaning() {
+  
 }

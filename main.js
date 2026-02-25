@@ -4,7 +4,7 @@ import { seed_cleanings } from './testing.js';
 import * as handler from './handler.js';
 import { generate_cleaning_report_image, get_current_semester_dates } from './helpers.js';
 
-import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
+import { MAIN_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
 import { schedule } from 'node-cron';
 import Eris, { CommandClient } from "eris";
@@ -190,7 +190,7 @@ function bot_init() {
   bot.send_report = async () => {
     // Find old report message if it is not cached
     if (!report_message_id) {
-      let messages = await bot.getMessages(TEST_CH, { limit: 50 })
+      let messages = await bot.getMessages(MAIN_CH, { limit: 50 })
       const target = messages.find(m => m.content?.includes("**Harmonogram**"));
       if(target) {
         report_message_id = target.id; 
@@ -200,7 +200,7 @@ function bot_init() {
     const report = await generate_cleaning_report_image(bot.semester_start, bot.semester_end);
 
     const report_message = await bot.createMessage(
-      TEST_CH,
+      MAIN_CH,
       {
         content:
           "- Pro přihlášení k úklidům použij `/join`.\n" +
@@ -214,7 +214,7 @@ function bot_init() {
 
     // delete old report message
     if (report_message_id) {
-      bot.deleteMessage(TEST_CH, report_message_id, "Report refresh.");
+      bot.deleteMessage(MAIN_CH, report_message_id, "Report refresh.");
     }
 
     console.log("Refreshed report.");

@@ -1,6 +1,6 @@
 import * as db from './db.js';
 import { generate_cleaning_report_image } from './helpers.js';
-import { TEST_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
+import { MAIN_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 import { generate_cleaning_modal, generate_template_modal, generate_template_modal_edit } from './modals.js';
 
 let bot;
@@ -303,7 +303,7 @@ export async function create_cleaning_modal(modal) {
     // type 12 is private thread
     // -- Create discord thread for cleaning
     let thread_channel = await bot.createThread(
-      TEST_CH, {invitable: false, name: thread_name, type: 12}
+      MAIN_CH, {invitable: false, name: thread_name, type: 12}
     );
     // -- Send message with cleaning instructions
     bot.createMessage(thread_channel.id, template.instructions, null);

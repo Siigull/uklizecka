@@ -38,8 +38,8 @@ Bot for managing semestral (weekly) cleanings on su fit discord.
     - node --env-file=.env main.js
 
 - ### Docker
-    - docker build -t uklizecka .
-    - docker run -d uklizecka
+    - docker build -t uklidy .
+    - docker run -d uklidy
 
 - ### Deployment
     - Ran with systemd/pm2 restart policy.

@@ -133,8 +133,6 @@ async function startup_bot() {
   schedule_send_notification_event();
   schedule_refresh_report();
   await db.sync_users(bot.guild_fetched);
-  // TODO(Sigull): temp
-  await seed_cleanings(bot);
 
   let when = await get_current_semester_dates();
   bot.semester_start = when.start_date;

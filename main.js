@@ -385,6 +385,15 @@ async function main() {
     }
   });
 
+  bot.on("error", (err) => {
+    console.error("Caught Eris client error:", err.message);
+    send_imp_log(err.message);
+  });
+
+  bot.on("shardDisconnect", (err, id) => {
+    console.log(`Shard ${id} disconnected:`, err?.message);
+  });
+
   bot.connect();
 }
 

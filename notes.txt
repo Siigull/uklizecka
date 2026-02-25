@@ -12,6 +12,7 @@ TODO(Sigull): What other thing would a manager want.
 TODO(Sigull): Add help before the report.
 TODO(Sigull): Think more about logging. If I want more robust logging in terminal with timestamps etc.
 
+TODO(Sigull): Do more robust delete, with popup modal
 
 TODO(Sigull): Run with systemd/pm2 restart policy.
 

@@ -94,7 +94,7 @@ const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}
 
   const stmt = db.prepare(`
     INSERT INTO cleaning 
-    (finished, started, date_start, date_end, discord_thread_id, template_rel) VALUES (?, ?, ?, ?, ?, ?)
+    (finished, started, sent_next_week_message, date_start, date_end, discord_thread_id, instruction_message_id, template_rel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const info = stmt.run(0, 0, date_start, date_end, discord_thread_id, template_id);
   return info;
@@ -421,7 +421,8 @@ export function get_cleanings(start_date, end_date) {
   try {
     let sql = `
       SELECT 
-          c.id, c.finished, c.started, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
+          c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
+          c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
           t.max_users, t.place, t.name, t.instructions,
           -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
           '[' || IFNULL(
@@ -448,9 +449,11 @@ export function get_cleanings(start_date, end_date) {
       users: JSON.parse(r.participants || '[]'),
       finished: !!r.finished,
       started: !!r.started,
+      sent_next_week_message: !!r.sent_next_week_message,
       date_start: r.date_start,
       date_end: r.date_end,
       discord_thread_id: r.discord_thread_id,
+      instruction_message_id: r.instruction_message_id,
       template_rel: r.template_rel,
       template: {
         max_users: r.max_users,
@@ -474,7 +477,8 @@ export function get_cleaning_by_id(cleaning_id) {
   try {
     const sql = `
       SELECT 
-          c.id, c.finished, c.started, c.date_start, c.date_end, c.discord_thread_id, c.template_rel, 
+          c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
+          c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
           t.max_users, t.place, t.name, t.instructions,
           '[' || IFNULL(
               GROUP_CONCAT(
@@ -501,9 +505,11 @@ export function get_cleaning_by_id(cleaning_id) {
       users: JSON.parse(row.participants || '[]'),
       finished: !!row.finished,
       started: !!row.started,
+      sent_next_week_message: !!row.sent_next_week_message,
       date_start: row.date_start,
       date_end: row.date_end,
       discord_thread_id: row.discord_thread_id,
+      instruction_message_id: row.instruction_message_id,
       template_rel: row.template_rel,
       template: {
         max_users: row.max_users,

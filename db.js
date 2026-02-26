@@ -424,6 +424,7 @@ export const user_join_cleaning_logged  = with_logging(_user_join_cleaning, _log
 export const user_kick_cleaning_logged  = with_logging(_user_kick_cleaning, _log_user_kick_cleaning);
 export const user_leave_cleaning_logged = with_logging(_user_leave_cleaning, _log_user_leave_cleaning);
 
+// -- Get functions
 /**
  * Fetches all registered users from the database.
  * @returns {Array<{id: number, discord_id: string, name: string}>}
@@ -438,7 +439,8 @@ export function get_users() {
   }
 }
 
-// Get functions
+
+// TODO(Sigull): Think about merging get_cleanings functions somehow
 export function get_cleanings(start_date, end_date) {
   try {
     let sql = `
@@ -465,6 +467,57 @@ export function get_cleanings(start_date, end_date) {
 
     const stmt = db.prepare(sql);
     const rows = stmt.all(start_date, end_date);
+
+    return rows.map(r => ({
+      id: r.id,
+      users: JSON.parse(r.participants || '[]'),
+      finished: !!r.finished,
+      started: !!r.started,
+      sent_next_week_message: !!r.sent_next_week_message,
+      date_start: r.date_start,
+      date_end: r.date_end,
+      discord_thread_id: r.discord_thread_id,
+      instruction_message_id: r.instruction_message_id,
+      template_rel: r.template_rel,
+      template: {
+        max_users: r.max_users,
+        place: r.place,
+        name: r.name,
+        instructions: r.instructions
+      }
+    }));
+  } catch (err) {
+    console.error("get_cleanings error:", err);
+    return [];
+  }
+}
+
+export function get_cleanings_with_template(template_id) {
+    try {
+    let sql = `
+      SELECT 
+          c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
+          c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
+          t.max_users, t.place, t.name, t.instructions,
+          -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
+          '[' || IFNULL(
+              GROUP_CONCAT(
+                  CASE WHEN u.id IS NOT NULL 
+                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
+                  ELSE NULL END
+              ), 
+              ''
+          ) || ']' AS participants
+      FROM cleaning c
+      LEFT JOIN template_cleaning t ON c.template_rel = t.id
+      LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
+      LEFT JOIN users u ON cp.user_id = u.id
+      WHERE c.template_rel = ?
+      GROUP BY c.id;
+    `;
+
+    const stmt = db.prepare(sql);
+    const rows = stmt.all(template_id);
 
     return rows.map(r => ({
       id: r.id,

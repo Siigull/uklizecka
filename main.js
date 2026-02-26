@@ -281,6 +281,10 @@ function bot_init() {
 
     await bot.send_log(`Thread ${thread_id} deleted.`);
   }
+
+  bot.update_text_message = async (channel_id, message_id, text) => {
+    bot.editMessage(channel_id, message_id, text);
+  }
 }
 
 async function leave_unauthorized_guilds() {

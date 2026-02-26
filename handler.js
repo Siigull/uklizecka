@@ -444,9 +444,27 @@ export async function edit_template_modal(modal) {
     }
   }
 
+  let old_t = db.get_template_by_id(id);
+
   db.update_template_logged(
     {id: id, max_users: max_users, place: place, name: name, instructions: instructions}
   );
+
+  if (old_t.instructions != instructions) {
+    let cleanings = db.get_cleanings_with_template(id);
+
+    const promises = [];
+    for (const cleaning of cleanings) {
+      promises.push(
+        bot.update_text_message(
+          cleaning.discord_thread_id,
+          cleaning.instruction_message_id,
+          cleaning.instructions
+        )
+      );
+    }
+    await Promise.all(promises);
+  }
 
   await modal.createMessage({ content: "Cleaning template updated.", flags: 64 });
 }

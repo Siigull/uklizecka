@@ -2,7 +2,7 @@
 import * as db from './db.js';
 import { seed_cleanings } from './testing.js';
 import * as handler from './handler.js';
-import { generate_cleaning_report_image, get_current_semester_dates } from './helpers.js';
+import { generate_cleaning_report_image, get_current_semester_dates, get_nick } from './helpers.js';
 
 import { MAIN_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
@@ -289,23 +289,8 @@ async function leave_unauthorized_guilds() {
   });
 }
 
-async function main() {
-  bot_init();
-  db.init(bot);
-
-  handler.handlers_init(bot); 
-
-  // TODO(Sigull): Help command
-  bot.on("ready", async () => {
-    await register_commands([...handler.public_commands, ...handler.manager_commands]);
-    await startup_bot();
-    await leave_unauthorized_guilds();
-    console.log("Bot startup finished.");
-  });
-
-  // -- Slash commands
-  bot.on("interactionCreate", async (interaction) => {
-    try{
+async function interaction_handler_switch(interaction) {
+  try{
     if (interaction.data) {
       // TODO(Sigull): Move permissions into middleware.
 
@@ -355,26 +340,53 @@ async function main() {
 
       console.error(`Command ${interaction} not implemented.`);
     }
-    } catch (err) {
+  } catch (err) {
       console.log(err);
       bot.send_imp_log(`Unhandled Interaction: ${err} \n ${interaction}`);
       await interaction.createMessage(
         {content: `Unhandled interaction error: ${err}`, flags: 64}
       );
-    }
+  }
+}
+
+async function main() {
+  bot_init();
+  db.init(bot);
+
+  handler.handlers_init(bot); 
+
+  // TODO(Sigull): Help command
+  bot.on("ready", async () => {
+    await register_commands([...handler.public_commands, ...handler.manager_commands]);
+    await startup_bot();
+    await leave_unauthorized_guilds();
+    console.log("Bot startup finished.");
+  });
+
+  // -- Slash commands
+  bot.on("interactionCreate", async (interaction) => {
+    await interaction_handler_switch(interaction);
+  });
+
+  bot.on("guildMemberAdd", (guild, member) => {
+    let has_cleaning_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
+    let nick = get_nick(member);
+
+    db.add_update_user_logged({discord_id: member.id, name: nick, has_role: has_cleaning_role});    
   });
 
   // TODO(Sigull): Maybe also when removal of roles.
   // -- User syncing to database
   bot.on("guildMemberUpdate", (guild, member, oldMember) => {
     let has_cleaning_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
-    // -- Nickname change
+    let nick = get_nick(member);
+
     if (oldMember.nick != member.nick) {
-      db.add_update_user_logged({discord_id: member.id, name: member.nick, has_role: has_cleaning_role});
+      db.add_update_user_logged({discord_id: member.id, name: nick, has_role: has_cleaning_role});
     
     // -- User got 'access to club' role
     } else if (!oldMember.roles.includes(CLEANING_ROLE) && has_cleaning_role) {
-      db.add_update_user_logged({discord_id: member.id, name: member.nick, has_role: has_cleaning_role});
+      db.add_update_user_logged({discord_id: member.id, name: nick, has_role: has_cleaning_role});
     }
   });
 
@@ -387,7 +399,7 @@ async function main() {
 
   bot.on("error", (err) => {
     console.error("Caught Eris client error:", err.message);
-    send_imp_log(err.message);
+    bot.send_imp_log(err.message);
   });
 
   bot.on("shardDisconnect", (err, id) => {

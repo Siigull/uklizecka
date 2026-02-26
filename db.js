@@ -4,6 +4,7 @@ db.leave_locked = false;
 
 import { CLEANING_ROLE, MANAGER_ROLE } from './config.js';
 import fs from 'fs';
+import { get_nick } from './helpers.js';
 
 let bot;
 
@@ -56,8 +57,10 @@ export async function sync_users(guild) {
   const sync_transaction = db.transaction((member_list) => {
     for (const member of member_list) {
       let id = member.id;
-      let nick = member.nick ? member.nick : member.user.username;
+      let nick = get_nick(member);
       let has_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
+
+      console.log(nick);
 
       // Could be optimized. This prepares every statement.
       let info = add_update_user_logged({
@@ -232,6 +235,32 @@ const _user_join_cleaning = ({discord_id, cleaning_id}) => {
   return info;
 };
 
+const _user_kick_cleaning = ({ discord_id, cleaning_id }) => {
+  const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
+  const cleaning = get_cleaning_by_id(cleaning_id);
+
+  if (!user) {
+    throw new Error(`User with discord_id ${discord_id} not found.`);
+  }
+  if (!cleaning) {
+    throw new Error(`Cleaning with id ${discord_id} doesn't exist.`);
+  }
+  if (!cleaning.users.some(user => user.discord_id == discord_id)) {
+    throw new Error(`You cannot kick a user from a cleaning he is not a part of.`)
+  }
+  if (cleaning.finished) {
+    throw new Error(`Can't kick from finished cleaning.`);
+  }
+
+  const stmt = db.prepare(`
+    DELETE FROM cleaning_participants 
+    WHERE cleaning_id = ? AND user_id = ?
+  `);
+
+  const info = stmt.run(cleaning_id, user.id);
+  return info;
+}
+
 const _user_leave_cleaning = ({discord_id, cleaning_id}) => {
   const user = db.prepare('SELECT id FROM users WHERE discord_id = ?').get(discord_id);
   const cleaning = get_cleaning_by_id(cleaning_id);
@@ -313,14 +342,19 @@ const _log_finish_cleaning = (prev_ret, { cleaning_id }) => {
 
 const _log_add_update_user = (prev_ret, { discord_id, name, has_role }) => {
   // New user was added
+  let log_message = "";
   if (prev_ret.changes > 0 && prev_ret.lastInsertRowid > 0) {
-    let log_message = `User ${name} now has to clean`;
-    send_log(log_message);
-
-  // Just nickname change
+    log_message = `User ${name} joined.`;
+    
+    // Just nickname change
   } else if (prev_ret.changes > 0) {
-    console.log(`${discord_id} changed their nickname`);
+    if (has_role) {
+      console.log(`${discord_id} changed their nickname.`);
+    } else {
+      log_message = `User ${name} now has to clean.`;
+    }
   }
+  send_log(log_message);
 }
 
 const _log_user_join_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
@@ -328,6 +362,11 @@ const _log_user_join_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
     send_log(`User <@${discord_id}> joined cleaning #${cleaning_id}`);
   }
 };
+
+const _log_user_kick_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
+  let log_message = `Member <@${discord_id} left cleaning ${cleaning_id}>`;
+  send_imp_log(log_message);
+}
 
 const _log_user_leave_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
   if (prev_ret.changes > 0) {
@@ -360,6 +399,7 @@ export const start_cleaning_logged      = with_logging(_start_cleaning, _log_sta
 export const finish_cleaning_logged     = with_logging(_finish_cleaning, _log_finish_cleaning);
 export const add_update_user_logged     = with_logging(_add_update_user, _log_add_update_user);
 export const user_join_cleaning_logged  = with_logging(_user_join_cleaning, _log_user_join_cleaning);
+export const user_kick_cleaning_logged  = with_logging(_user_kick_cleaning, _log_user_kick_cleaning);
 export const user_leave_cleaning_logged = with_logging(_user_leave_cleaning, _log_user_leave_cleaning);
 
 /**

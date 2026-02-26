@@ -268,3 +268,8 @@ export async function get_current_semester_dates() {
     return { start_date: "2000-01-01", end_date: "2100-01-01" };
   }
 }
+
+// nickname or just username if member doesn't have it
+export function get_nick(member) {
+  return member.nick ? member.nick : member.user.username;
+}

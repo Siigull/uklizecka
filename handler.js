@@ -461,6 +461,14 @@ export async function remove_cleaning(msg) {
   await msg.createMessage({content: `Cleaning ${cleaning_id} removed`, flags: 64});
 }
 
-export async function kick_user_cleaning() {
-  
+export async function kick_user_cleaning(msg) {
+  // TODO(Sigull): This will probably break
+  let cleaning_id     = msg.data.options[0].value;
+  let user_discord_id = msg.data.options[0].value;
+
+  db.kick_user_cleaning({cleaning_id, user_id});
+
+  await kick_from_cleaning_thread(cleaning_id, user_discord_id);
+
+  await msg.createMessage({content: `Member <@${user_discord_id}> kicked.`, flags: 64});
 }

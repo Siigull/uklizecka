@@ -65,11 +65,14 @@ async function send_cleaning_notifications() {
   const cleanings = get_cleanings_notify();
   const tasks = [];
 
-  const nextTasks = cleanings.next.map(async (element) => {
+  const nextTasks = cleanings.next.flatMap(async (element) => {
+    if (element.sent_next_week_message) return [];
+
     const members_ping = element.users.map(user => `<@${user.discord_id}>`).join('');
-    return bot.createMessage(
+    db.send_next_week_logged(element.id);
+    return [bot.createMessage(
       element.discord_thread_id, "Příští týden máte úklid " + members_ping
-    );
+    )];
   });
   tasks.push(...nextTasks);
 

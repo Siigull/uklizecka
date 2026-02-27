@@ -33,7 +33,7 @@ function md_err(func) {
     } catch(err) {
       console.log("Handler error: " + err);
       await arg.createMessage({
-        content: err,
+        content: `${err}\n${err.stack}`,
         flags: 64,
       });
 

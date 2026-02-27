@@ -347,7 +347,7 @@ async function interaction_handler_switch(interaction) {
     }
   } catch (err) {
       console.log(err);
-      bot.send_imp_log(`Unhandled Interaction: ${err} \n ${interaction}`);
+      bot.send_imp_log(`Unhandled Interaction: ${err} \n ${err.stack} \n ${interaction}`);
       await interaction.createMessage(
         {content: `Unhandled interaction error: ${err}`, flags: 64}
       );
@@ -447,7 +447,7 @@ const fatal_exit = (() => {
 process.on("uncaughtException", (err) => {
   (async () => {
     try {
-      if (bot) await bot.send_imp_log(`uncaughtException: ${err?.stack || err}`);
+      if (bot) await bot.send_imp_log(`uncaughtException: ${err} \n ${err?.stack}`);
     } finally {
       fatal_exit(err, "uncaughtException");
     }
@@ -457,7 +457,7 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   (async () => {
     try {
-      if (bot) await bot.send_imp_log(`unhandledRejection: ${reason}`);
+      if (bot) await bot.send_imp_log(`unhandledRejection: ${reason} \n ${reason?.stack}`);
     } catch {}
     console.error("[unhandledRejection]", reason);
   })();

@@ -60,8 +60,6 @@ export async function sync_users(guild) {
       let nick = get_nick(member);
       let has_role = member.roles.includes(CLEANING_ROLE) ? 1 : 0;
 
-      console.log(nick);
-
       // Could be optimized. This prepares every statement.
       let info = add_update_user_logged({
         discord_id: id,
@@ -138,7 +136,7 @@ const _send_next_week = ({ cleaning_id }) => {
 
   const stmt = db.prepare(`
     UPDATE cleaning
-    SET sent_next_week_message = 1,
+    SET sent_next_week_message = 1
     WHERE id = ?
   `);
 
@@ -430,173 +428,155 @@ export const user_leave_cleaning_logged = with_logging(_user_leave_cleaning, _lo
  * @returns {Array<{id: number, discord_id: string, name: string}>}
  */
 export function get_users() {
-  try {
-    const stmt = db.prepare('SELECT id, discord_id, has_role, name FROM users');
-    return stmt.all();
-  } catch (err) {
-    console.error("get_users error:", err);
-    return [];
-  }
+  const stmt = db.prepare('SELECT id, discord_id, has_role, name FROM users');
+  return stmt.all();
 }
 
 
 // TODO(Sigull): Think about merging get_cleanings functions somehow
 export function get_cleanings(start_date, end_date) {
-  try {
-    let sql = `
-      SELECT 
-          c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
-          c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
-          t.max_users, t.place, t.name, t.instructions,
-          -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
-          '[' || IFNULL(
-              GROUP_CONCAT(
-                  CASE WHEN u.id IS NOT NULL 
-                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
-                  ELSE NULL END
-              ), 
-              ''
-          ) || ']' AS participants
-      FROM cleaning c
-      LEFT JOIN template_cleaning t ON c.template_rel = t.id
-      LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
-      LEFT JOIN users u ON cp.user_id = u.id
-      WHERE c.date_start >= ? AND c.date_end <= ?
-      GROUP BY c.id;
-    `;
+  let sql = `
+    SELECT 
+        c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
+        c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
+        t.max_users, t.place, t.name, t.instructions,
+        -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
+        '[' || IFNULL(
+            GROUP_CONCAT(
+                CASE WHEN u.id IS NOT NULL 
+                THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
+                ELSE NULL END
+            ), 
+            ''
+        ) || ']' AS participants
+    FROM cleaning c
+    LEFT JOIN template_cleaning t ON c.template_rel = t.id
+    LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
+    LEFT JOIN users u ON cp.user_id = u.id
+    WHERE c.date_start >= ? AND c.date_end <= ?
+    GROUP BY c.id;
+  `;
 
-    const stmt = db.prepare(sql);
-    const rows = stmt.all(start_date, end_date);
+  const stmt = db.prepare(sql);
+  const rows = stmt.all(start_date, end_date);
 
-    return rows.map(r => ({
-      id: r.id,
-      users: JSON.parse(r.participants || '[]'),
-      finished: !!r.finished,
-      started: !!r.started,
-      sent_next_week_message: !!r.sent_next_week_message,
-      date_start: r.date_start,
-      date_end: r.date_end,
-      discord_thread_id: r.discord_thread_id,
-      instruction_message_id: r.instruction_message_id,
-      template_rel: r.template_rel,
-      template: {
-        max_users: r.max_users,
-        place: r.place,
-        name: r.name,
-        instructions: r.instructions
-      }
-    }));
-  } catch (err) {
-    console.error("get_cleanings error:", err);
-    return [];
-  }
+  return rows.map(r => ({
+    id: r.id,
+    users: JSON.parse(r.participants || '[]'),
+    finished: !!r.finished,
+    started: !!r.started,
+    sent_next_week_message: !!r.sent_next_week_message,
+    date_start: r.date_start,
+    date_end: r.date_end,
+    discord_thread_id: r.discord_thread_id,
+    instruction_message_id: r.instruction_message_id,
+    template_rel: r.template_rel,
+    template: {
+      max_users: r.max_users,
+      place: r.place,
+      name: r.name,
+      instructions: r.instructions
+    }
+  }));
 }
 
 export function get_cleanings_with_template(template_id) {
-    try {
-    let sql = `
-      SELECT 
-          c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
-          c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
-          t.max_users, t.place, t.name, t.instructions,
-          -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
-          '[' || IFNULL(
-              GROUP_CONCAT(
-                  CASE WHEN u.id IS NOT NULL 
-                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
-                  ELSE NULL END
-              ), 
-              ''
-          ) || ']' AS participants
-      FROM cleaning c
-      LEFT JOIN template_cleaning t ON c.template_rel = t.id
-      LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
-      LEFT JOIN users u ON cp.user_id = u.id
-      WHERE c.template_rel = ?
-      GROUP BY c.id;
-    `;
+  let sql = `
+    SELECT 
+        c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
+        c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
+        t.max_users, t.place, t.name, t.instructions,
+        -- This creates a JSON array of objects: [{"id": "123", "n": "Alice"}, {"id": "456", "n": "Bob"}]
+        '[' || IFNULL(
+            GROUP_CONCAT(
+                CASE WHEN u.id IS NOT NULL 
+                THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
+                ELSE NULL END
+            ), 
+            ''
+        ) || ']' AS participants
+    FROM cleaning c
+    LEFT JOIN template_cleaning t ON c.template_rel = t.id
+    LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
+    LEFT JOIN users u ON cp.user_id = u.id
+    WHERE c.template_rel = ?
+    GROUP BY c.id;
+  `;
 
-    const stmt = db.prepare(sql);
-    const rows = stmt.all(template_id);
+  const stmt = db.prepare(sql);
+  const rows = stmt.all(template_id);
 
-    return rows.map(r => ({
-      id: r.id,
-      users: JSON.parse(r.participants || '[]'),
-      finished: !!r.finished,
-      started: !!r.started,
-      sent_next_week_message: !!r.sent_next_week_message,
-      date_start: r.date_start,
-      date_end: r.date_end,
-      discord_thread_id: r.discord_thread_id,
-      instruction_message_id: r.instruction_message_id,
-      template_rel: r.template_rel,
-      template: {
-        max_users: r.max_users,
-        place: r.place,
-        name: r.name,
-        instructions: r.instructions
-      }
-    }));
-  } catch (err) {
-    console.error("get_cleanings error:", err);
-    return [];
-  }
+  return rows.map(r => ({
+    id: r.id,
+    users: JSON.parse(r.participants || '[]'),
+    finished: !!r.finished,
+    started: !!r.started,
+    sent_next_week_message: !!r.sent_next_week_message,
+    date_start: r.date_start,
+    date_end: r.date_end,
+    discord_thread_id: r.discord_thread_id,
+    instruction_message_id: r.instruction_message_id,
+    template_rel: r.template_rel,
+    template: {
+      max_users: r.max_users,
+      place: r.place,
+      name: r.name,
+      instructions: r.instructions
+    }
+  }));
 }
 
 /**
  * Fetches a single cleaning record by its ID, including template info and participants.
  * @param {number|string} cleaning_id
- * @returns {Object|null} The cleaning object or null if not found.
+ * @returns {Object} The cleaning object
  */
 export function get_cleaning_by_id(cleaning_id) {
-  try {
-    const sql = `
-      SELECT 
-          c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
-          c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
-          t.max_users, t.place, t.name, t.instructions,
-          '[' || IFNULL(
-              GROUP_CONCAT(
-                  CASE WHEN u.id IS NOT NULL 
-                  THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
-                  ELSE NULL END
-              ), 
-              ''
-          ) || ']' AS participants
-      FROM cleaning c
-      LEFT JOIN template_cleaning t ON c.template_rel = t.id
-      LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
-      LEFT JOIN users u ON cp.user_id = u.id
-      WHERE c.id = ?
-      GROUP BY c.id;
-    `;
+  const sql = `
+    SELECT 
+        c.id, c.finished, c.started, c.sent_next_week_message, c.date_start, 
+        c.date_end, c.discord_thread_id, c.instruction_message_id, c.template_rel, 
+        t.max_users, t.place, t.name, t.instructions,
+        '[' || IFNULL(
+            GROUP_CONCAT(
+                CASE WHEN u.id IS NOT NULL 
+                THEN JSON_OBJECT('discord_id', u.discord_id, 'name', u.name, 'has_role', u.has_role) 
+                ELSE NULL END
+            ), 
+            ''
+        ) || ']' AS participants
+    FROM cleaning c
+    LEFT JOIN template_cleaning t ON c.template_rel = t.id
+    LEFT JOIN cleaning_participants cp ON c.id = cp.cleaning_id
+    LEFT JOIN users u ON cp.user_id = u.id
+    WHERE c.id = ?
+    GROUP BY c.id;
+  `;
 
-    const row = db.prepare(sql).get(cleaning_id);
+  const row = db.prepare(sql).get(cleaning_id);
 
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      users: JSON.parse(row.participants || '[]'),
-      finished: !!row.finished,
-      started: !!row.started,
-      sent_next_week_message: !!row.sent_next_week_message,
-      date_start: row.date_start,
-      date_end: row.date_end,
-      discord_thread_id: row.discord_thread_id,
-      instruction_message_id: row.instruction_message_id,
-      template_rel: row.template_rel,
-      template: {
-        max_users: row.max_users,
-        place: row.place,
-        name: row.name,
-        instructions: row.instructions
-      }
-    };
-  } catch (err) {
-    console.error(`get_cleaning_by_id error for ID ${cleaning_id}:`, err);
-    return null;
+  if (!row) {
+    throw new Error(`Cleaning with id ${cleaning_id} doesn't exist.`);
   }
+
+  return {
+    id: row.id,
+    users: JSON.parse(row.participants || '[]'),
+    finished: !!row.finished,
+    started: !!row.started,
+    sent_next_week_message: !!row.sent_next_week_message,
+    date_start: row.date_start,
+    date_end: row.date_end,
+    discord_thread_id: row.discord_thread_id,
+    instruction_message_id: row.instruction_message_id,
+    template_rel: row.template_rel,
+    template: {
+      max_users: row.max_users,
+      place: row.place,
+      name: row.name,
+      instructions: row.instructions
+    }
+  };
 }
 
 /**
@@ -604,13 +584,8 @@ export function get_cleaning_by_id(cleaning_id) {
  * @returns {Array<{id: number, max_users: number, place: string, name: string, instructions: string}>}
  */
 export function get_templates() {
-  try {
-    const stmt = db.prepare('SELECT * FROM template_cleaning');
-    return stmt.all();
-  } catch (err) {
-    console.error("get_templates error:", err);
-    return [];
-  }
+  const stmt = db.prepare('SELECT * FROM template_cleaning');
+  return stmt.all();
 }
 
 export function get_template_by_id(template_id) {

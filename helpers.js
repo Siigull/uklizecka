@@ -2,6 +2,7 @@ import * as db from './db.js';
 import * as cheerio from "cheerio";
 
 import { createCanvas } from 'canvas';
+import { MANAGER_ROLE } from './config.js';
 
 /**
  * Generates a Gantt-style cleaning schedule
@@ -272,4 +273,8 @@ export async function get_current_semester_dates() {
 // nickname or just username if member doesn't have it
 export function get_nick(member) {
   return member.nick ? member.nick : member.user.username;
+}
+
+export function is_manager(member) {
+  return member.roles.some(r => r === MANAGER_ROLE);
 }

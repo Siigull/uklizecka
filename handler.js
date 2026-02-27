@@ -52,7 +52,7 @@ export function handlers_init(bot_instance) {
       description: "Sends table of cleanings.",
       fullDescription: "Sends table of cleanings from this semester. The table is sent as a generated image.",
       type: 1,
-      handler_function: md_err(report_command),
+      handler_function: md_report(md_err(report_command)),
     },
     {
       name: "join",
@@ -129,7 +129,13 @@ export function handlers_init(bot_instance) {
       name: "remove-cleaning",
       description: "Remove cleaning with id",
       type: 1,
-      handler_function: md_err(remove_cleaning),
+      options: [{
+        name: "target_id",
+        description: "The id of template to edit. Get by list-templates.",
+        type: 4,
+        required: true
+      }],
+      handler_function: md_report(md_err(remove_cleaning)),
     }
   ];
     
@@ -473,7 +479,7 @@ export async function remove_cleaning(msg) {
   let cleaning_id = msg.data.options[0].value;
   let cleaning = db.get_cleaning_by_id(cleaning_id);
 
-  db.remove_cleaning({cleaning_id: cleaning_id});
+  db.remove_cleaning_logged({cleaning_id: cleaning_id});
   await bot.remove_thread(cleaning.discord_thread_id);
 
   await msg.createMessage({content: `Cleaning ${cleaning_id} removed`, flags: 64});

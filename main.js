@@ -2,7 +2,7 @@
 import * as db from './db.js';
 import { seed_cleanings } from './testing.js';
 import * as handler from './handler.js';
-import { generate_cleaning_report_image, get_current_semester_dates, get_nick } from './helpers.js';
+import { generate_cleaning_report_image, get_current_semester_dates, get_nick, is_manager } from './helpers.js';
 
 import { MAIN_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
@@ -69,7 +69,7 @@ async function send_cleaning_notifications() {
     if (element.sent_next_week_message) return [];
 
     const members_ping = element.users.map(user => `<@${user.discord_id}>`).join('');
-    db.send_next_week_logged(element.id);
+    db.send_next_week_logged({cleaning_id: element.id});
     return [bot.createMessage(
       element.discord_thread_id, "Příští týden máte úklid " + members_ping
     )];
@@ -200,26 +200,30 @@ function bot_init() {
 
     const report = await generate_cleaning_report_image(bot.semester_start, bot.semester_end);
 
-    const report_message = await bot.createMessage(
-      MAIN_CH,
-      {
-        content:
-          "- Pro přihlášení k úklidům použij `/join`.\n" +
-          "- Pro odhlášení použij `/leave`.\n" +
-          "- V týdnu tvého úklidu se v příslušném vlákně objeví zpráva s tlačítkem **Dokončen** pro potvrzení úklidu.\n" +
-          `- S jakýmkoliv problémem/napádem napište <@&${MANAGER_ROLE}>\n` +
-          "# 📋 **Harmonogram**"
-      },
-      report
-    );
-
-    // delete old report message
     if (report_message_id) {
-      bot.deleteMessage(MAIN_CH, report_message_id, "Report refresh.");
+      bot.editMessage(MAIN_CH, report_message_id, {
+        attachments: [], 
+        file: report,
+      })
+
+    } else {
+      const report_message = await bot.createMessage(
+        MAIN_CH,
+        {
+          content:
+            "- Pro přihlášení k úklidům použij `/join`.\n" +
+            "- Pro odhlášení použij `/leave`.\n" +
+            "- V týdnu tvého úklidu se v příslušném vlákně objeví zpráva s tlačítkem **Dokončen** pro potvrzení úklidu.\n" +
+            `- S jakýmkoliv problémem/napádem napište <@&${MANAGER_ROLE}>\n` +
+            "# 📋 **Harmonogram**"
+        },
+        report
+      );
+
+      report_message_id = report_message.id;
     }
 
     console.log("Refreshed report.");
-    report_message_id = report_message.id;
   }
 
   bot.start_cleaning = async (cleaning_id) => {
@@ -271,13 +275,7 @@ function bot_init() {
   }
 
   bot.remove_thread = async (thread_id) => {
-    let thread = bot.getChannel;
-
-    if (!thread) {
-      throw new Error(`Thread to archive with id not defined`);
-    }
-
-    await thread.delete();
+    await bot.deleteChannel(thread_id);
 
     await bot.send_log(`Thread ${thread_id} deleted.`);
   }
@@ -356,6 +354,18 @@ async function interaction_handler_switch(interaction) {
   }
 }
 
+async function delete_non_manager_message(msg) {
+  if (msg.author.id == bot.user.id) {
+    return;
+  }
+
+  if (is_manager(msg.member)) {
+    return;
+  }
+
+  await msg.delete("Only manager cand send messages here.");
+}
+
 async function main() {
   bot_init();
   db.init(bot);
@@ -373,6 +383,10 @@ async function main() {
   // -- Slash commands
   bot.on("interactionCreate", async (interaction) => {
     await interaction_handler_switch(interaction);
+  });
+
+  bot.on("messageCreate", (msg) => {
+    delete_non_manager_message(msg);
   });
 
   bot.on("guildMemberAdd", (guild, member) => {
@@ -448,4 +462,3 @@ process.on("unhandledRejection", (reason) => {
     console.error("[unhandledRejection]", reason);
   })();
 });
-

@@ -17,11 +17,9 @@ CREATE TABLE IF NOT EXISTS cleaning (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   finished INTEGER DEFAULT 0,
   started BOOLEAN,
-  sent_next_week_message BOOLEAN,
   date_start DATE,
   date_end DATE,
   discord_thread_id TEXT,
-  instruction_message_id TEXT,
   template_rel INTEGER,
   FOREIGN KEY(template_rel) REFERENCES template_cleaning(id)
 );

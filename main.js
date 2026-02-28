@@ -215,6 +215,7 @@ function bot_init() {
           content:
             "- Pro přihlášení k úklidům použij `/join`.\n" +
             "- Pro odhlášení použij `/leave`.\n" +
+            "  - Argument je id úklidu zobrazeno vlevo nahoře na kartě." +
             "- V týdnu tvého úklidu se v příslušném vlákně objeví zpráva s tlačítkem **Dokončen** pro potvrzení úklidu.\n" +
             `- S jakýmkoliv problémem/napádem napište <@&${MANAGER_ROLE}>\n` +
             "# 📋 **Harmonogram**"

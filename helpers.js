@@ -276,5 +276,5 @@ export function get_nick(member) {
 }
 
 export function is_manager(member) {
-  return member.roles.some(r => r === MANAGER_ROLE);
+  return member.roles.some(r => r === MANAGER_ROLE) || member.permissions.has("administrator");
 }

@@ -299,8 +299,6 @@ async function leave_unauthorized_guilds() {
 async function interaction_handler_switch(interaction) {
   try{
     if (interaction.data) {
-      // TODO(Sigull): Move permissions into middleware.
-
       // -- Public commands
       let public_command = handler.public_commands.find(c => c.name === interaction.data.name);
       if (public_command && public_command.handler_function) {
@@ -374,7 +372,6 @@ async function main() {
 
   handler.handlers_init(bot); 
 
-  // TODO(Sigull): Help command
   bot.on("ready", async () => {
     await register_commands([...handler.public_commands, ...handler.manager_commands]);
     await startup_bot();

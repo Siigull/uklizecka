@@ -5,16 +5,10 @@ Maybe have a button for individual finish and total.
 TODO(Sigull): Have group id for cleanings created at the same time
               to have easier delete.
 TODO(Sigull): Feature(Splitting cleaning into smaller parts).
-TODO(Sigull): Maybe add responsive errors right in the commands. Like what
-              writes when the integer argument is not an integer.
 
 TODO(Sigull): What other thing would a manager want.
-TODO(Sigull): Add help before the report.
-TODO(Sigull): Think more about logging. If I want more robust logging in terminal with timestamps etc.
 
 TODO(Sigull): Do more robust delete, with popup modal
-
-TODO(Sigull): Run with systemd/pm2 restart policy.
 
 node --env-file=.env main.js
 docker build -t uklizecka .

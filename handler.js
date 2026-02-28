@@ -149,7 +149,6 @@ export function handlers_init(bot_instance) {
       handler_function: md_report(md_err(create_cleaning_modal)),
     },
     {
-      // TODO(Sigull): Should reload thread messages with data from this.
       name: "edit-template-modal",
       handler_function: md_report(md_err(edit_template_modal)),
     }

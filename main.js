@@ -407,6 +407,10 @@ async function main() {
     // -- User got 'access to club' role
     } else if (!oldMember.roles.includes(CLEANING_ROLE) && has_cleaning_role) {
       db.add_update_user_logged({discord_id: member.id, name: nick, has_role: has_cleaning_role});
+    
+    // -- User no longer has 'access to club' role
+    } else if (oldMember.roles.includes(CLEANING_ROLE) && !has_cleaning_role) {
+      db.add_update_user_logged({discord_id: member.id, name: nick, has_role: has_cleaning_role});
     }
   });
 

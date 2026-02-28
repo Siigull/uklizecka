@@ -318,11 +318,12 @@ export async function create_cleaning_modal(modal) {
       MAIN_CH, {invitable: false, name: thread_name, type: 12}
     );
     // -- Send message with cleaning instructions
-    bot.createMessage(thread_channel.id, template.instructions, null);
+    let instruction_message = await bot.createMessage(thread_channel.id, template.instructions, null);
 
     // -- Create data to be sent later
     cleaning_list.push({template_id: template_id, date_start: date_start, 
-                        date_end: date_end, discord_thread_id: thread_channel.id});
+                        date_end: date_end, discord_thread_id: thread_channel.id,
+                        instruction_message: instruction_message.id});
 
     date_start = increment_week(date_start);
     date_end = increment_week(date_end);
@@ -465,7 +466,7 @@ export async function edit_template_modal(modal) {
         bot.update_text_message(
           cleaning.discord_thread_id,
           cleaning.instruction_message_id,
-          cleaning.instructions
+          cleaning.template.instructions
         )
       );
     }

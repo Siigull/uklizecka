@@ -78,7 +78,7 @@ export async function sync_users(guild) {
 }
 
 // -- Add functions
-const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}) => {
+const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id, instruction_message}) => {
   const overlap_stmt = db.prepare(`
     SELECT COUNT(*) AS count FROM cleaning
     WHERE template_rel = ?
@@ -94,7 +94,7 @@ const _create_cleaning = ({template_id, date_start, date_end, discord_thread_id}
     INSERT INTO cleaning 
     (finished, started, sent_next_week_message, date_start, date_end, discord_thread_id, instruction_message_id, template_rel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const info = stmt.run(0, 0, 0, date_start, date_end, discord_thread_id, null, template_id);
+  const info = stmt.run(0, 0, 0, date_start, date_end, discord_thread_id, instruction_message, template_id);
   return info;
 }
 
@@ -109,7 +109,8 @@ const _create_cleanings = ({cleaning_list}) => {
   const sync_transaction = db.transaction((cleaning_list) => {
     for (const c of cleaning_list) {
       create_cleaning_logged({template_id: c.template_id, date_start: c.date_start, 
-                              date_end: c.date_end, discord_thread_id: c.discord_thread_id});
+                              date_end: c.date_end, discord_thread_id: c.discord_thread_id,
+                              instruction_message: c.instruction_message});
     }
   });
 

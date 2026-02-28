@@ -40,6 +40,3 @@ Bot for managing semestral (weekly) cleanings on su fit discord.
 - ### Docker
     - docker build -t uklidy .
     - docker run -d uklidy
-
-- ### Deployment
-    - Ran with systemd/pm2 restart policy.

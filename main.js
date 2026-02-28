@@ -175,21 +175,19 @@ function bot_init() {
   }
 
   bot.send_log = async (message) => {
-    if (message === undefined || message === null || message === '') return;
     message = `[${new Date().toISOString()}]: ${message}`;
     console.log(message);
     return bot.send(LOG_CH, message).catch(err => {
       console.log("Send log message error: ", err);
-    })
+    });
   }
 
   bot.send_imp_log = async (message) => {
-    if (message === undefined || message === null || message === '') return;
     message = `[${new Date().toISOString()}]: ${message}`;
     console.log(message);
     return bot.send(IMP_LOG_CH, message).catch(err => {
       console.log("Send important log message error: ", err);
-    })
+    });
   }
 
   bot.send_report = async () => {

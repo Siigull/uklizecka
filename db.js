@@ -374,7 +374,10 @@ const _log_add_update_user = (prev_ret, { discord_id, name, has_role }) => {
       log_message = `User ${name} now has to clean.`;
     }
   }
-  send_log(log_message);
+
+  if (log_message != "") {
+    send_log(log_message);
+  }
 }
 
 const _log_user_join_cleaning = (prev_ret, { discord_id, cleaning_id }) => {

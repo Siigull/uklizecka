@@ -388,7 +388,7 @@ const _log_user_join_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
 };
 
 const _log_user_kick_cleaning = (prev_ret, { discord_id, cleaning_id }) => {
-  let log_message = `Member <@${discord_id} left cleaning ${cleaning_id}>`;
+  let log_message = `Member <@${discord_id}> left cleaning ${cleaning_id}`;
   send_imp_log(log_message);
 }
 

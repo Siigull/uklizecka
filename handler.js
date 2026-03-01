@@ -1,5 +1,5 @@
 import * as db from './db.js';
-import { generate_cleaning_report_image } from './helpers.js';
+import { generate_cleaning_report_image, get_start_current_week, format_date } from './helpers.js';
 import { MAIN_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 import { generate_cleaning_modal, generate_template_modal, generate_template_modal_edit } from './modals.js';
 

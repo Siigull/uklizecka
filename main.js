@@ -2,7 +2,7 @@
 import * as db from './db.js';
 import { seed_cleanings } from './testing.js';
 import * as handler from './handler.js';
-import { generate_cleaning_report_image, get_current_semester_dates, get_nick, is_manager } from './helpers.js';
+import { generate_cleaning_report_image, get_current_semester_dates, get_nick, get_start_current_week, is_manager, format_date } from './helpers.js';
 
 import { MAIN_CH, LOG_CH, GUILD_ID, CLEANING_ROLE, IMP_LOG_CH, MANAGER_ROLE } from './config.js'
 
@@ -12,17 +12,10 @@ import Eris, { CommandClient } from "eris";
 let report_message_id;
 let bot;
 
-const formatDate = (date) => date.toISOString().split('T')[0];
-
 // get all cleanings from previous, this, next weeks
 // TODO(Sigull): How to handle old cleanings which weren't done.
 function get_cleanings_notify() {
-  const now = new Date();
-  const currentDay = now.getDay(); 
-  const diffToMon = currentDay === 0 ? -6 : 1 - currentDay;
-  
-  let startThisWeek = new Date(now);
-  startThisWeek.setDate(now.getDate() + diffToMon);
+  let startThisWeek = get_start_current_week();
   let endThisWeek = new Date(startThisWeek);
   endThisWeek.setDate(startThisWeek.getDate() + 6);
 
@@ -37,9 +30,9 @@ function get_cleanings_notify() {
   endNextWeek.setDate(startNextWeek.getDate() + 6);
 
   // Fetch
-  let previous_week = db.get_cleanings(formatDate(startPrevWeek), formatDate(endPrevWeek));
-  let this_week     = db.get_cleanings(formatDate(startThisWeek), formatDate(endThisWeek));
-  let next_week     = db.get_cleanings(formatDate(startNextWeek), formatDate(endNextWeek));
+  let previous_week = db.get_cleanings(format_date(startPrevWeek), format_date(endPrevWeek));
+  let this_week     = db.get_cleanings(format_date(startThisWeek), format_date(endThisWeek));
+  let next_week     = db.get_cleanings(format_date(startNextWeek), format_date(endNextWeek));
 
   // Get only unfinished
   previous_week = previous_week.filter((element, index, _) => {

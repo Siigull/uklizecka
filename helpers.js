@@ -278,3 +278,18 @@ export function get_nick(member) {
 export function is_manager(member) {
   return member.roles.some(r => r === MANAGER_ROLE) || member.permissions.has("administrator");
 }
+
+export function get_start_current_week() {
+  const now = new Date();
+  const currentDay = now.getDay(); 
+  const diffToMon = currentDay === 0 ? -6 : 1 - currentDay;
+  
+  let startThisWeek = new Date(now);
+  startThisWeek.setDate(now.getDate() + diffToMon);
+
+  return startThisWeek;
+}
+
+export function format_date(date) {
+  return date.toISOString().split('T')[0];
+}

@@ -227,15 +227,21 @@ function bot_init() {
     db.start_cleaning_logged({cleaning_id});
     await bot.createMessage(cleaning.discord_thread_id,
       {
-        content: "Byl úklid dokončen?",
+        embeds: [
+          {
+            title: "🧹 Úklid zahájen",
+            description: `Úklid **#${cleaning.id}** byl zahájen.\nAž budete hotovi, potvrďte dokončení tlačítkem níže.`,
+            color: 0x57F287,
+            timestamp: new Date().toISOString(),
+          }
+        ],
         components: [
           {
             type: 1,
-            custom_id: "confirm_cleaning",
             components: [
               {
                 type: 2,
-                label: "Dokončen",
+                label: "✅ Dokončen",
                 style: 3,
                 custom_id: `finished ${cleaning.id}`,
               },

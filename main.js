@@ -284,7 +284,7 @@ function bot_init() {
   }
 
   bot.update_text_message = async (channel_id, message_id, text) => {
-    bot.editMessage(channel_id, message_id, text);
+    await bot.editMessage(channel_id, message_id, text);
   }
 }
 

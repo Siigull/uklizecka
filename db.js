@@ -256,7 +256,7 @@ const _user_kick_cleaning = ({ discord_id, cleaning_id }) => {
     throw new Error(`User with discord_id ${discord_id} not found.`);
   }
   if (!cleaning) {
-    throw new Error(`Cleaning with id ${discord_id} doesn't exist.`);
+    throw new Error(`Cleaning with id ${cleaning_id} doesn't exist.`);
   }
   if (!cleaning.users.some(user => user.discord_id == discord_id)) {
     throw new Error(`You cannot kick a user from a cleaning he is not a part of.`)
@@ -369,9 +369,10 @@ const _log_add_update_user = (prev_ret, { discord_id, name, has_role }) => {
     // Just nickname change
   } else if (prev_ret.changes > 0) {
     if (has_role) {
-      console.log(`${discord_id} changed their nickname.`);
-    } else {
       log_message = `User ${name} now has to clean.`;
+
+    } else {
+      console.log(`${discord_id} changed their nickname.`);
     }
   }
 

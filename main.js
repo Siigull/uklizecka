@@ -65,31 +65,31 @@ async function send_cleaning_notifications() {
   const cleanings = get_cleanings_notify();
   const tasks = [];
 
-  const nextTasks = cleanings.next.flatMap(async (element) => {
-    if (element.sent_next_week_message) return [];
-
-    const members_ping = element.users.map(user => `<@${user.discord_id}>`).join('');
-    db.send_next_week_logged({cleaning_id: element.id});
-    return [bot.createMessage(
-      element.discord_thread_id, "Příští týden máte úklid " + members_ping
-    )];
-  });
-  tasks.push(...nextTasks);
-
-  const currentTasks = cleanings.current.map(async (element) => {
-    if (!element.started) {
-      return bot.start_cleaning(element.id);
+  // -- Next week notifications
+  for (const element of cleanings.next) {
+    if (!element.sent_next_week_message) {
+      const members_ping = element.users.map(user => `<@${user.discord_id}>`).join('');
+      db.send_next_week_logged({cleaning_id: element.id});
+      tasks.push(bot.createMessage(
+        element.discord_thread_id, "Příští týden máte úklid " + members_ping
+      ));
     }
-  });
-  tasks.push(...currentTasks);
+  }
 
-  const previousTasks = cleanings.previous.map(async (element) => {
+  // -- Current week cleanings
+  for (const element of cleanings.current) {
     if (!element.started) {
-      await bot.start_cleaning(element.id);
+      tasks.push(bot.start_cleaning(element.id));
     }
-    return bot.send_warning_unfinished(element.id);
-  });
-  tasks.push(...previousTasks);
+  }
+
+  // -- Previous week cleanings
+  for (const element of cleanings.previous) {
+    if (!element.started) {
+      tasks.push(bot.start_cleaning(element.id));
+    }
+    tasks.push(bot.send_warning_unfinished(element.id));
+  }
 
   await Promise.all(tasks);
   console.log("All notifications and status updates sent.");
@@ -203,7 +203,7 @@ function bot_init() {
     const report = await generate_cleaning_report_image(bot.semester_start, bot.semester_end);
 
     if (report_message_id) {
-      bot.editMessage(MAIN_CH, report_message_id, {
+      await bot.editMessage(MAIN_CH, report_message_id, {
         attachments: [], 
         file: report,
       })

@@ -136,6 +136,26 @@ export function handlers_init(bot_instance) {
         required: true
       }],
       handler_function: md_report(md_err(remove_cleaning)),
+    },
+    {
+      name: "kick-user-cleaning",
+      description: "Kick user from cleaning.",
+      type: 1,
+      options: [
+        {
+          name: "user",
+          description: "The user being kicked.",
+          type: 6,
+          required: true,
+        },
+        {
+          name: "cleaning_id",
+          description: "The cleaning id.",
+          type: 4,
+          required: true,
+        }
+      ],
+      handler_function: md_report(md_err(kick_user_cleaning)),
     }
   ];
     
@@ -486,10 +506,10 @@ export async function remove_cleaning(msg) {
 }
 
 export async function kick_user_cleaning(msg) {
-  let cleaning_id     = msg.data.options[0].value;
-  let user_discord_id = msg.data.options[1].value;
+  let user_discord_id = msg.data.options[0].value;
+  let cleaning_id     = msg.data.options[1].value;
 
-  db.user_kick_cleaning_logged({cleaning_id, user_id});
+  db.user_kick_cleaning_logged({discord_id: user_discord_id, cleaning_id: cleaning_id});
 
   await kick_from_cleaning_thread(cleaning_id, user_discord_id);
 

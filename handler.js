@@ -486,11 +486,10 @@ export async function remove_cleaning(msg) {
 }
 
 export async function kick_user_cleaning(msg) {
-  // TODO(Sigull): This will probably break
   let cleaning_id     = msg.data.options[0].value;
-  let user_discord_id = msg.data.options[0].value;
+  let user_discord_id = msg.data.options[1].value;
 
-  db.kick_user_cleaning({cleaning_id, user_id});
+  db.user_kick_cleaning_logged({cleaning_id, user_id});
 
   await kick_from_cleaning_thread(cleaning_id, user_discord_id);
 

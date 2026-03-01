@@ -9,13 +9,6 @@ export let manager_commands;
 export let manager_interactions;
 export let button_commands;
 
-class SkipReportError extends Error {
-  constructor(message = "Skip report") {
-    super(message);
-    this.name = "SkipReportError";
-  }
-}
-
 function md_report(func) {
   return async (arg) => {
     if(await func(arg) !== "skip_report") {

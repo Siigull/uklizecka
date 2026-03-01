@@ -10,8 +10,6 @@ TODO(Sigull): What other thing would a manager want.
 
 TODO(Sigull): Do more robust delete, with popup modal
 
-TODO(Sigull): Better finish button.
-
 node --env-file=.env main.js
 docker build -t uklizecka .
 docker run -d uklizecka

@@ -344,6 +344,17 @@ export async function create_cleaning_modal(modal) {
   // -- Put cleanings to db
   db.create_cleanings_logged({cleaning_list});
 
+  let created_cleanings = db.get_cleanings_with_template(template_id);
+
+  const promises = [];
+  const week_start = format_date(get_start_current_week());
+  for (const c of created_cleanings) {
+    if (c.date_start <= week_start && c.date_end >= week_start) {
+      promises.push(bot.start_cleaning(c.id));
+    }
+  }
+  await Promise.all(promises);
+
   await modal.createMessage({ content: "Cleaning/s created.", flags: 64});
 }
 

@@ -499,6 +499,7 @@ export async function remove_cleaning(msg) {
 }
 
 export async function kick_user_cleaning(msg) {
+  await msg.defer(64);
   let user_discord_id = msg.data.options[0].value;
   let cleaning_id     = msg.data.options[1].value;
 
